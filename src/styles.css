@@ -67,6 +67,11 @@ h2 .sub { font-size: 12px; color: var(--text-dim); font-weight: 400; margin-left
   margin-bottom: 12px;
 }
 .card.offline { opacity: 0.55; }
+.card.compact { padding: 7px 12px; margin-bottom: 7px; }
+.card.compact .dev-id { width: 230px; flex-shrink: 0; overflow: hidden; }
+.card.compact .dev-name input { font-size: 13.5px; width: 100%; }
+.card.compact .dev-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.compact .media-info { margin-top: 3px; padding-left: 19px; }
 
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrap { flex-wrap: wrap; }
@@ -133,5 +138,11 @@ label.chk { display: inline-flex; align-items: center; gap: 5px; cursor: pointer
 }
 
 .section-gap { margin-top: 24px; }
+.section-title {
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.section-title .sub { font-size: 11px; color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
 .hint { color: var(--text-dim); font-size: 12px; margin-top: 6px; }
 .toolbar { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }

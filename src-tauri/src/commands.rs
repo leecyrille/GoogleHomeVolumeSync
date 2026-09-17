@@ -169,7 +169,7 @@ pub fn add_manual_device(core: CoreState, device: ManualDevice) {
 #[tauri::command]
 pub async fn scan_roku(core: CoreState<'_>) -> Result<usize, String> {
     info!("ui: roku SSDP scan");
-    let found = crate::backends::roku::ssdp_discover().await;
+    let found = crate::backends::roku::discover().await;
     let count = found.len();
     for (ip, name, model, _serial) in found {
         let device = ManualDevice {

@@ -76,7 +76,8 @@ function renderDevices() {
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
     </div>
-    ${state.devices.map((d) => deviceCard(d, stale(d))).join("")}
+    ${section("Devices", state.devices.filter((d) => !d.is_cast_group), stale)}
+    ${section("Google Cast Groups", state.devices.filter((d) => d.is_cast_group), stale)}
     ${state.devices.length === 0 ? `<div class="hint">Searching for Google Cast devices on your network…</div>` : ""}
   `;
   content.innerHTML = html;
@@ -93,6 +94,12 @@ function renderDevices() {
   for (const d of state.devices) wireDeviceCard(d);
 }
 
+function section(title: string, devices: Device[], stale: (d: Device) => boolean): string {
+  if (devices.length === 0) return "";
+  return `<div class="section-title">${title} <span class="sub">${devices.filter((d) => d.online).length} online</span></div>
+    ${devices.map((d) => deviceCard(d, stale(d))).join("")}`;
+}
+
 function deviceCard(d: Device, stale: boolean): string {
   const pct = Math.round(d.volume * 100);
   const media = d.media
@@ -100,27 +107,22 @@ function deviceCard(d: Device, stale: boolean): string {
        ${d.media.title ? " — " + esc(d.media.title) : ""}${d.media.artist ? " · " + esc(d.media.artist) : ""}</div>`
     : "";
   return `
-  <div class="card ${d.online ? "" : "offline"}" data-id="${esc(d.id)}">
+  <div class="card compact ${d.online ? "" : "offline"}" data-id="${esc(d.id)}">
     <div class="row">
       <span class="dot ${d.online ? "on" : ""}" title="${d.online ? "Online" : "Offline"}"></span>
-      <div class="grow">
+      <div class="dev-id" title="${esc(d.friendly_name)} · ${esc(d.model)} · ${esc(d.ip)}">
         <div class="dev-name"><input value="${esc(displayName(d))}" data-act="rename" title="Click to rename (blank = reset to device name)" /></div>
-        <div class="dev-meta">${esc(d.friendly_name)} · ${esc(d.model)} · ${esc(d.ip)}
-          ${!d.online ? ` · last seen ${ago(d.last_seen)}` : ""}</div>
+        <div class="dev-meta">${d.is_cast_group ? "cast group · " : ""}${esc(d.model)}${!d.online ? ` · last seen ${ago(d.last_seen)}` : ""}</div>
       </div>
-      ${d.is_cast_group ? `<span class="badge group">Cast Group</span>` : ""}
-      <span class="badge backend">${d.backend}</span>
-      ${stale ? `<button class="btn danger icon" data-act="delete" title="Remove until seen again">✕</button>` : ""}
-    </div>
-    <div class="row" style="margin-top:10px">
       <button class="btn icon ${d.muted ? "muted-on" : ""}" data-act="mute" title="Mute">${d.muted ? "🔇" : "🔊"}</button>
-      <input type="range" min="0" max="100" value="${pct}" data-act="vol" ${d.can_absolute_volume ? "" : ""} />
+      <input type="range" min="0" max="100" value="${pct}" data-act="vol" />
       <span class="vol-pct">${pct}%</span>
-      ${d.backend === "roku" ? `<button class="btn" data-act="recal" title="Re-zero volume calibration on next set">Recalibrate</button>` : ""}
       ${d.media?.supports_transport ? `
         <button class="btn icon" data-act="prev">⏮</button>
         <button class="btn icon" data-act="${d.media.state === "PLAYING" ? "pause" : "play"}">${d.media.state === "PLAYING" ? "⏸" : "▶"}</button>
         <button class="btn icon" data-act="next">⏭</button>` : ""}
+      ${d.backend === "roku" ? `<button class="btn icon" data-act="recal" title="Re-zero volume calibration on next set">🎯</button>` : ""}
+      ${stale ? `<button class="btn danger icon" data-act="delete" title="Remove until seen again">✕</button>` : ""}
     </div>
     ${media}
   </div>`;

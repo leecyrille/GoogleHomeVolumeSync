@@ -125,8 +125,81 @@ async fn keypress(client: &reqwest::Client, base: &str, key: &str) -> Result<(),
         .ok_or(())
 }
 
+/// Discover Rokus: SSDP M-SEARCH first; if the multicast reply path is blocked
+/// (common with the Windows firewall), fall back to probing the local /24 on
+/// port 8060. Returns (ip, name, model, serial).
+pub async fn discover() -> Vec<(String, String, String, String)> {
+    let mut found = ssdp_discover().await;
+    if found.is_empty() {
+        info!("roku: SSDP found nothing, probing subnet on port 8060");
+        found = subnet_probe().await;
+    }
+    found
+}
+
+async fn subnet_probe() -> Vec<(String, String, String, String)> {
+    let Some(local) = local_ipv4().await else { return vec![] };
+    let octets = local.octets();
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(2)).build().unwrap();
+    let mut tasks = tokio::task::JoinSet::new();
+    for host in 1..=254u8 {
+        let ip = std::net::Ipv4Addr::new(octets[0], octets[1], octets[2], host);
+        tasks.spawn(async move {
+            let ok = tokio::time::timeout(
+                Duration::from_millis(400),
+                tokio::net::TcpStream::connect((ip, 8060)),
+            ).await.map(|r| r.is_ok()).unwrap_or(false);
+            ok.then(|| ip.to_string())
+        });
+    }
+    let mut ips = Vec::new();
+    while let Some(res) = tasks.join_next().await {
+        if let Ok(Some(ip)) = res {
+            ips.push(ip);
+        }
+    }
+    let mut found = Vec::new();
+    for ip in ips {
+        if let Some(info) = query_device_info(&client, &ip).await {
+            found.push(info);
+        }
+    }
+    found
+}
+
+async fn local_ipv4() -> Option<std::net::Ipv4Addr> {
+    // Route trick: connecting a UDP socket picks the outbound interface.
+    let sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await.ok()?;
+    sock.connect("8.8.8.8:80").await.ok()?;
+    match sock.local_addr().ok()? {
+        std::net::SocketAddr::V4(a) => Some(*a.ip()),
+        _ => None,
+    }
+}
+
+async fn query_device_info(client: &reqwest::Client, ip: &str) -> Option<(String, String, String, String)> {
+    let resp = client.get(format!("http://{ip}:8060/query/device-info")).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let xml = resp.text().await.ok()?;
+    let tag = |t: &str| {
+        xml.split(&format!("<{t}>")).nth(1)
+            .and_then(|r| r.split(&format!("</{t}>")).next())
+            .unwrap_or("").to_string()
+    };
+    let name = {
+        let n = tag("user-device-name");
+        if n.is_empty() { tag("friendly-device-name") } else { n }
+    };
+    let model = tag("model-name");
+    let serial = tag("serial-number");
+    info!(ip=%ip, name=%name, model=%model, serial=%serial, "roku: found device");
+    Some((ip.to_string(), name, model, serial))
+}
+
 /// One-shot SSDP M-SEARCH for Roku devices; returns (ip, name, model, serial).
-pub async fn ssdp_discover() -> Vec<(String, String, String, String)> {
+async fn ssdp_discover() -> Vec<(String, String, String, String)> {
     let mut found = Vec::new();
     let sock = match tokio::net::UdpSocket::bind(("0.0.0.0", 0)).await {
         Ok(s) => s,
@@ -152,22 +225,8 @@ pub async fn ssdp_discover() -> Vec<(String, String, String, String)> {
         }
     }
     for ip in ips {
-        if let Ok(resp) = client.get(format!("http://{ip}:8060/query/device-info")).send().await {
-            if let Ok(xml) = resp.text().await {
-                let tag = |t: &str| {
-                    xml.split(&format!("<{t}>")).nth(1)
-                        .and_then(|r| r.split(&format!("</{t}>")).next())
-                        .unwrap_or("").to_string()
-                };
-                let name = {
-                    let n = tag("user-device-name");
-                    if n.is_empty() { tag("friendly-device-name") } else { n }
-                };
-                let model = tag("model-name");
-                let serial = tag("serial-number");
-                info!(ip=%ip, name=%name, model=%model, serial=%serial, "ssdp: found roku");
-                found.push((ip.clone(), name, model, serial));
-            }
+        if let Some(info) = query_device_info(&client, &ip).await {
+            found.push(info);
         }
     }
     found
