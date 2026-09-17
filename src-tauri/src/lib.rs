@@ -120,6 +120,15 @@ pub fn run() {
 
             tray::setup_tray(app.handle(), core.clone())?;
 
+            // Apply the start-with-windows setting (defaults to enabled).
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let autostart = app.autolaunch();
+                let want = core.inner.lock().unwrap().cfg.settings.start_with_windows;
+                let _ = if want { autostart.enable() } else { autostart.disable() };
+                info!(start_with_windows = want, "autostart: applied");
+            }
+
             // Start hidden if launched with --hidden (autostart).
             if std::env::args().any(|a| a == "--hidden") {
                 if let Some(win) = app.get_webview_window("main") {

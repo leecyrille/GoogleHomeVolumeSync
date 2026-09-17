@@ -43,7 +43,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/leecyrille/ghvs-releases/releases/latest/download/latest.json"
+        "https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCMTkyNDBCNEYyQzI1RjQKUldUMEpTeFBDeVFaMjFKSDQ4WW53ZXhYNFYyQlYxR0UrRHRZa3J5NnY5RVF0aDZqSUp0Q0ZqbnAK"
     }

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unofficial Google Home Volume Sync — keep speaker volumes matched</title>
+  <meta name="description" content="Free Windows app that keeps Google Home / Nest speaker volumes in sync across your house. Runs locally, no cloud.">
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #171e26; --card: #1d2733; --border: #2b3a4b;
+      --text: #dce8f2; --dim: #7b8ea0; --accent: #4c8df6; --accent2: #6ea8ff; --ok: #3fce7b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.6; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+    header { padding: 64px 0 40px; text-align: center; }
+    h1 { font-size: 34px; line-height: 1.2; }
+    h1 .unofficial { display: block; font-size: 14px; color: var(--dim); font-weight: 400; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .desc {
+      margin: 22px auto 0; max-width: 700px; font-size: 17px; color: var(--text);
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px;
+    }
+    .cta { margin-top: 28px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block; padding: 13px 26px; border-radius: 9px; text-decoration: none; font-weight: 600; font-size: 16px;
+      background: var(--accent); color: #06182f; transition: background .15s;
+    }
+    .btn:hover { background: var(--accent2); }
+    .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn.ghost:hover { background: rgba(76,141,246,.1); }
+    .sub-note { color: var(--dim); font-size: 13px; margin-top: 10px; }
+    section { padding: 36px 0; }
+    h2 { font-size: 22px; margin-bottom: 18px; color: var(--accent2); }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .feat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+    .feat b { color: var(--text); }
+    .feat p { color: var(--dim); font-size: 14px; margin-top: 4px; }
+    .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .prod { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+    .prod h3 { font-size: 16px; }
+    .prod p { color: var(--dim); font-size: 13.5px; flex: 1; }
+    .prod a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: 14px; }
+    .prod a:hover { text-decoration: underline; }
+    .donate { text-align: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 26px; }
+    footer { padding: 34px 0 44px; color: var(--dim); font-size: 12.5px; text-align: center; border-top: 1px solid var(--border); margin-top: 20px; }
+    footer a { color: var(--accent); }
+    .disclosure { max-width: 720px; margin: 8px auto 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1><span class="unofficial">Unofficial · not affiliated with Google</span>Google Home Volume Sync</h1>
+      <div class="desc">
+        Keep google home speaker and device volumes in sync with the program running on your Windows computer.
+        It looks for changes in volume in devices, and matches the volume on devices you assign in this program.
+        You can also adjust relative volume gain to balance volumes as desired throughout your home.
+      </div>
+      <div class="cta">
+        <a class="btn" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest">⬇ Download for Windows</a>
+        <a class="btn ghost" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View on GitHub (open source)</a>
+      </div>
+      <div class="sub-note">Free · runs 100% locally on your network · no cloud account needed · starts with Windows</div>
+    </header>
+
+    <section>
+      <h2>What it does</h2>
+      <div class="features">
+        <div class="feat"><b>Finds every Cast device</b><p>Google Home, Nest Mini, Nest Audio, Nest Hub, Chromecasts and cast groups appear automatically.</p></div>
+        <div class="feat"><b>Sync groups</b><p>Group any speakers; change one volume anywhere (app, phone, or the speaker itself) and the rest follow instantly.</p></div>
+        <div class="feat"><b>Sync Gain balancing</b><p>Set a per-device 0–200% gain so quiet corners get boosted and loud rooms stay tame.</p></div>
+        <div class="feat"><b>System tray presets</b><p>Right-click the tray icon and set any group to 5%…100% in two clicks, plus play/pause controls.</p></div>
+        <div class="feat"><b>Scheduler</b><p>Quiet the house at bedtime: weekly day/time rules that set volumes for groups or single devices.</p></div>
+        <div class="feat"><b>More than Google</b><p>Also controls Roku TVs, Yamaha MusicCast receivers, LG TVs and more, in the same sync groups.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Hardware that pairs well with it</h2>
+      <div class="products">
+        <div class="prod">
+          <h3>Intel N100 Mini PC (Windows 11)</h3>
+          <p>A tiny ~6W always-on PC is perfect for running the sync service 24/7 — silent, cheap, and it disappears behind a monitor or on a shelf.</p>
+          <a href="https://www.amazon.com/s?k=intel+n100+mini+pc+windows+11&tag=AFFILIATE_TAG" rel="nofollow sponsored">Shop N100 mini PCs on Amazon →</a>
+        </div>
+        <div class="prod">
+          <h3>Google Nest Mini (2nd gen)</h3>
+          <p>The cheapest way to put synced audio in every room.</p>
+          <a href="https://www.amazon.com/s?k=google+nest+mini+2nd+generation&tag=AFFILIATE_TAG" rel="nofollow sponsored">Shop Nest Mini on Amazon →</a>
+        </div>
+        <div class="prod">
+          <h3>Google Nest Audio</h3>
+          <p>Bigger sound for living spaces; pairs into stereo sets that this app treats as one device.</p>
+          <a href="https://www.amazon.com/s?k=google+nest+audio+speaker&tag=AFFILIATE_TAG" rel="nofollow sponsored">Shop Nest Audio on Amazon →</a>
+        </div>
+        <div class="prod">
+          <h3>Google Nest Hub (2nd gen)</h3>
+          <p>A screen for the kitchen or bedside — shows what's playing and joins sync groups like any speaker.</p>
+          <a href="https://www.amazon.com/s?k=google+nest+hub+2nd+gen&tag=AFFILIATE_TAG" rel="nofollow sponsored">Shop Nest Hub on Amazon →</a>
+        </div>
+        <div class="prod">
+          <h3>Google Nest Hub Max</h3>
+          <p>The big-screen, big-speaker option for the main room.</p>
+          <a href="https://www.amazon.com/s?k=google+nest+hub+max&tag=AFFILIATE_TAG" rel="nofollow sponsored">Shop Nest Hub Max on Amazon →</a>
+        </div>
+        <div class="prod">
+          <h3>Chromecast with Google TV</h3>
+          <p>Brings your TV into the same volume groups and schedules.</p>
+          <a href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=AFFILIATE_TAG" rel="nofollow sponsored">Shop Chromecast on Amazon →</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="donate">
+        <h2>Enjoying it?</h2>
+        <p style="color:var(--dim); margin-bottom:16px;">This app is free and open source. If it made your house sound better, you can buy me a coffee.</p>
+        <a class="btn" href="DONATE_URL">☕ Donate</a>
+      </div>
+    </section>
+
+    <footer>
+      <p>Unofficial Google Home Volume Sync is an independent open-source project. Google, Google Home, Google Nest, Chromecast and related marks are trademarks of Google LLC. This project is not affiliated with, endorsed by, or sponsored by Google.</p>
+      <p class="disclosure">As an Amazon Associate this site earns from qualifying purchases made through the product links above.</p>
+      <p style="margin-top:10px;"><a href="https://github.com/leecyrille/GoogleHomeVolumeSync">Source code &amp; issue tracker on GitHub</a></p>
+    </footer>
+  </div>
+</body>
+</html>

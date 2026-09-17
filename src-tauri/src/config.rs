@@ -4,12 +4,20 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub start_with_windows: bool,
     #[serde(default)]
     pub auto_update: bool,
+}
+fn default_true() -> bool {
+    true
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Settings { start_with_windows: true, auto_update: false }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
