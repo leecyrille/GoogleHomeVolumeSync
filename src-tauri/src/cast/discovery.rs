@@ -44,16 +44,16 @@ pub fn start_cast_browse(tx: tokio::sync::mpsc::Sender<DiscoveredCast>) {
                 let friendly = get("fn");
                 // Cast groups run on the group leader with model "Google Cast Group".
                 let is_group = model.eq_ignore_ascii_case("Google Cast Group");
-                let ip = info
+                // IPv4 only: cast devices always advertise v4, and v6 link-local
+                // addresses aren't reliably routable from here.
+                let Some(ip) = info
                     .get_addresses()
                     .iter()
                     .find(|a| a.is_ipv4())
-                    .or_else(|| info.get_addresses().iter().next())
                     .map(|a| a.to_string())
-                    .unwrap_or_default();
-                if ip.is_empty() {
+                else {
                     continue;
-                }
+                };
                 let d = DiscoveredCast {
                     uuid: uuid.clone(),
                     friendly_name: friendly.clone(),
