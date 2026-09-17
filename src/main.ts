@@ -418,4 +418,19 @@ listen<Snapshot>("state", (e) => {
   if (dragging.size === 0 && !editing && view !== "log") render();
 });
 
-invoke<Snapshot>("get_state").then((s) => { state = s; render(); });
+invoke<Snapshot>("get_state").then((s) => { state = s; render(); maybeCheckUpdates(); });
+
+async function maybeCheckUpdates() {
+  if (!state.settings.auto_update) return;
+  try {
+    const { check } = await import("@tauri-apps/plugin-updater");
+    const update = await check();
+    if (update) {
+      if (confirm(`Update ${update.version} is available. Install now?`)) {
+        await update.downloadAndInstall();
+      }
+    }
+  } catch {
+    // No releases published yet or offline - silently ignore.
+  }
+}
