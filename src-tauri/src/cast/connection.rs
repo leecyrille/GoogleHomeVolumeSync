@@ -100,7 +100,13 @@ impl CastActor {
         loop {
             tokio::select! {
                 msg = read_frame(&mut rd) => {
-                    let msg = match msg { Ok(m) => m, Err(_) => return false };
+                    let msg = match msg {
+                        Ok(m) => m,
+                        Err(e) => {
+                            warn!(id=%self.id, name=%self.name, error=%e, "cast: read error");
+                            return false;
+                        }
+                    };
                     last_pong = tokio::time::Instant::now();
                     if let Some(payload) = msg.payload_utf8.as_deref() {
                         if let Ok(v) = serde_json::from_str::<Value>(payload) {

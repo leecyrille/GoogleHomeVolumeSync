@@ -91,10 +91,6 @@ impl Core {
         inner.cfg_dirty = false;
     }
 
-    fn mark_dirty(&self) {
-        self.inner.lock().unwrap().cfg_dirty = true;
-    }
-
     // ---- device lifecycle -------------------------------------------------
 
     pub fn on_cast_discovered(&self, d: DiscoveredCast) {
