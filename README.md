@@ -1,8 +1,8 @@
-# Pacto Cast Sync
+# Unofficial Google Home Volume Sync
 
 A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control — fully local, no cloud APIs.
 
-![Pacto Tech](src/assets/pacto-logo.png)
+
 
 ## Features
 
@@ -16,7 +16,7 @@ A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast de
 - **Custom names** for devices and groups.
 - **Last seen** shown for devices offline >1 day, with a delete option (they re-add when seen again).
 - **Config export/import** (JSON).
-- **Full logging** of discoveries, observed changes and sent commands — always with cast UUIDs, IPs and names — to `%APPDATA%\PactoCastSync\logs\`.
+- **Full logging** of discoveries, observed changes and sent commands — always with cast UUIDs, IPs and names — to `%APPDATA%\GoogleHomeVolumeSync\logs\`.
 - **Start with Windows** (login autostart, starts hidden in tray).
 - **Optional auto-updates** from GitHub releases.
 
@@ -47,9 +47,9 @@ npm run tauri build
 
 Produces an NSIS `.exe` installer under `src-tauri/target/release/bundle/nsis/` (per-user install, no admin needed).
 
-Update signing: the updater public key is in `tauri.conf.json`; the private key lives outside the repo (`~/.tauri/pacto-cast-sync.key`). Release artifacts for auto-update are published to a public releases repo as `latest.json` + signed installers.
+Update signing: the updater public key is in `tauri.conf.json`; the private key lives outside the repo (`~/.tauri/ghvs.key`). Release artifacts for auto-update are published to a public releases repo as `latest.json` + signed installers.
 
 ## Config & logs
 
-- Config: `%APPDATA%\PactoCastSync\config.json`
-- Logs: `%APPDATA%\PactoCastSync\logs\pacto-cast-sync.log.*` (daily rolling)
+- Config: `%APPDATA%\GoogleHomeVolumeSync\config.json`
+- Logs: `%APPDATA%\GoogleHomeVolumeSync\logs\volume-sync.log.*` (daily rolling)

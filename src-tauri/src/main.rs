@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    pacto_cast_sync_lib::run()
+    ghvs_lib::run()
 }

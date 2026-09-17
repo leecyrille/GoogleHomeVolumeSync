@@ -1,12 +1,12 @@
 [package]
-name = "pacto-cast-sync"
+name = "google-home-volume-sync"
 version = "0.1.0"
-description = "Pacto Cast Volume Sync - control and sync volume of Google Cast and other network AV devices"
-authors = ["Pacto Tech"]
+description = "Unofficial Google Home Volume Sync - control and sync volume of Google Cast and other network AV devices"
+authors = ["Lee Maskell"]
 edition = "2021"
 
 [lib]
-name = "pacto_cast_sync_lib"
+name = "ghvs_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

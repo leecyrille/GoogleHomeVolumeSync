@@ -44,7 +44,7 @@ pub fn setup_tray(app: &AppHandle, core: Arc<Core>) -> tauri::Result<()> {
     let core_for_menu = core.clone();
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(app.default_window_icon().unwrap().clone())
-        .tooltip("Pacto Cast Sync")
+        .tooltip("Volume Sync")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| {

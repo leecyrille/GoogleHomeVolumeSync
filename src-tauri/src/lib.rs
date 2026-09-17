@@ -20,15 +20,15 @@ pub fn run() {
     // File + console logging. Keep the guard alive for the process lifetime.
     let log_dir = config::config_dir().join("logs");
     let _ = std::fs::create_dir_all(&log_dir);
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "pacto-cast-sync.log");
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "volume-sync.log");
     let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
     Box::leak(Box::new(guard));
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new("info,pacto_cast_sync_lib=debug"))
+        .with(tracing_subscriber::EnvFilter::new("info,ghvs_lib=debug"))
         .with(tracing_subscriber::fmt::layer().with_ansi(false).with_writer(file_writer))
         .with(tracing_subscriber::fmt::layer())
         .init();
-    info!("=== Pacto Cast Sync starting ===");
+    info!("=== Unofficial Google Home Volume Sync starting ===");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

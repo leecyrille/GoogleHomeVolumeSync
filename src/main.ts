@@ -389,7 +389,7 @@ function renderSettings() {
   document.getElementById("set-autostart")!.addEventListener("change", push);
   document.getElementById("set-update")!.addEventListener("change", push);
   document.getElementById("cfg-export")!.addEventListener("click", async () => {
-    const path = await save({ defaultPath: "pacto-cast-sync-config.json", filters: [{ name: "JSON", extensions: ["json"] }] });
+    const path = await save({ defaultPath: "volume-sync-config.json", filters: [{ name: "JSON", extensions: ["json"] }] });
     if (path) await invoke("export_config", { path });
   });
   document.getElementById("cfg-import")!.addEventListener("click", async () => {

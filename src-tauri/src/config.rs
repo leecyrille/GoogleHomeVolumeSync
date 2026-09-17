@@ -43,9 +43,15 @@ pub struct AppConfig {
 }
 
 pub fn config_dir() -> PathBuf {
-    let dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("PactoCastSync");
+    let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let dir = base.join("GoogleHomeVolumeSync");
+    if !dir.exists() {
+        // One-time migration from the pre-rebrand directory name.
+        let old = base.join("PactoCastSync");
+        if old.exists() {
+            let _ = std::fs::rename(&old, &dir);
+        }
+    }
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
