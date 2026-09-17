@@ -25,7 +25,7 @@ pub fn get_state(core: CoreState) -> Snapshot {
 #[tauri::command]
 pub fn set_volume(core: CoreState, id: String, level: f32) {
     info!(id=%id, level, "ui: set device volume");
-    core.set_device_volume(&id, level.clamp(0.0, 1.0), true);
+    core.set_device_volume_from_ui(&id, level.clamp(0.0, 1.0));
 }
 
 #[tauri::command]

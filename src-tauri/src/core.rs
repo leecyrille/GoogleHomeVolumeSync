@@ -308,16 +308,60 @@ impl Core {
     }
 
     pub fn group_transport(&self, group_id: &str, cmd: DeviceCmd) {
-        let members = {
+        // Send to members that actually have a media session. Grouped playback
+        // (e.g. Spotify to a Google cast group) hosts its session on the cast
+        // group device, not the member speakers - so if no member has a
+        // session, fall back to online cast-group devices that are playing.
+        let targets = {
             let inner = self.inner.lock().unwrap();
-            inner.cfg.groups.iter().find(|g| g.id == group_id).map(|g| g.member_ids.clone())
-        };
-        if let Some(members) = members {
-            info!(group=%group_id, ?cmd, "core: group transport command");
-            for m in members {
-                self.send_cmd(&m, cmd.clone());
+            let Some(g) = inner.cfg.groups.iter().find(|g| g.id == group_id) else { return };
+            let with_session: Vec<String> = g.member_ids.iter()
+                .filter(|m| inner.devices.get(*m).map(|e| e.info.media.is_some()).unwrap_or(false))
+                .cloned().collect();
+            if !with_session.is_empty() {
+                with_session
+            } else {
+                inner.devices.values()
+                    .filter(|e| e.info.is_cast_group && e.info.online && e.info.media.is_some())
+                    .map(|e| e.info.id.clone())
+                    .collect()
             }
+        };
+        info!(group=%group_id, ?cmd, ?targets, "core: group transport command");
+        for t in targets {
+            self.send_cmd(&t, cmd.clone());
         }
+    }
+
+    /// UI-originated volume change: set the device and mirror to synced peers.
+    pub fn set_device_volume_from_ui(&self, id: &str, level: f32) {
+        let peers: Vec<String> = {
+            let mut inner = self.inner.lock().unwrap();
+            let mut peers = Vec::new();
+            let groups: Vec<AppGroup> = inner.cfg.groups.iter()
+                .filter(|g| g.sync_enabled && g.member_ids.contains(&id.to_string()))
+                .cloned().collect();
+            for g in groups {
+                if let Some(gm) = inner.cfg.groups.iter_mut().find(|x| x.id == g.id) {
+                    gm.group_volume = level;
+                }
+                for m in &g.member_ids {
+                    if m.as_str() != id && !peers.contains(m) {
+                        peers.push(m.clone());
+                    }
+                }
+            }
+            if !peers.is_empty() {
+                info!(id=%id, level, ?peers, "core: sync - mirroring UI volume change to group peers");
+                inner.cfg_dirty = true;
+            }
+            peers
+        };
+        self.set_device_volume(id, level, true);
+        for p in peers {
+            self.set_device_volume(&p, level, true);
+        }
+        self.emit_state();
     }
 
     // ---- event handling (incl. sync engine) --------------------------------
