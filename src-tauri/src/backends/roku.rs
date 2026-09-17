@@ -20,7 +20,9 @@ pub struct RokuActor {
     pub cached_level: Option<u8>,
 }
 
-const KEY_DELAY: Duration = Duration::from_millis(120);
+// TCL/Roku TVs silently drop volume keypresses sent faster than ~3-4/s.
+const KEY_DELAY: Duration = Duration::from_millis(300);
+const ZERO_SETTLE: Duration = Duration::from_millis(1000);
 
 impl RokuActor {
     pub async fn run(mut self) {
@@ -48,6 +50,16 @@ impl RokuActor {
                     match cmd {
                         DeviceCmd::Shutdown => return,
                         DeviceCmd::SetVolume(level) => {
+                            // Collapse any queued-up SetVolume commands (slider drags):
+                            // only the most recent target matters, ramps are slow.
+                            let mut level = level;
+                            while let Ok(next) = self.cmd_rx.try_recv() {
+                                match next {
+                                    DeviceCmd::SetVolume(l) => level = l,
+                                    DeviceCmd::Shutdown => return,
+                                    _ => {}
+                                }
+                            }
                             let target = (level * 100.0).round().clamp(0.0, 100.0) as i32;
                             self.set_volume(&client, &base, target).await;
                         }
@@ -95,6 +107,7 @@ impl RokuActor {
                     }
                     tokio::time::sleep(KEY_DELAY).await;
                 }
+                tokio::time::sleep(ZERO_SETTLE).await;
                 for _ in 0..target {
                     if keypress(client, base, "VolumeUp").await.is_err() {
                         warn!(id=%self.id, "roku: keypress failed during ramp-up");
