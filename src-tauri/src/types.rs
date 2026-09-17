@@ -63,6 +63,8 @@ pub enum CoreEvent {
     VolumeChanged { id: String, volume: f32, muted: bool },
     MediaChanged { id: String, media: Option<MediaInfo> },
     Online { id: String, online: bool },
+    /// Members of a Google cast group (normalized device ids), via multizone.
+    GroupMembers { id: String, members: Vec<String> },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

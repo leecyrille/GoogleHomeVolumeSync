@@ -142,7 +142,7 @@ pub fn import_config(app: tauri::AppHandle, core: CoreState, path: String) -> Re
                 let mut info = imported.clone();
                 info.online = false;
                 info.media = None;
-                inner.devices.insert(info.id.clone(), crate::core::Entry { info, cmd: None });
+                inner.devices.insert(info.id.clone(), crate::core::Entry { info, cmd: None, group_members: Vec::new() });
             }
         }
         inner.cfg.groups = cfg.groups;

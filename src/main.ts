@@ -107,7 +107,7 @@ function deviceCard(d: Device, stale: boolean): string {
   const pct = Math.round(d.volume * 100);
   const media = d.media
     ? `<div class="media-info">${d.media.state === "PLAYING" ? `<span class="playing">▶ Playing</span>` : d.media.state === "PAUSED" ? "⏸ Paused" : d.media.state}
-       ${d.media.title ? " — " + esc(d.media.title) : ""}${d.media.artist ? " · " + esc(d.media.artist) : ""}</div>`
+       ${d.media.title ? " — " + esc(d.media.title) : ""}${d.media.artist ? " · " + esc(d.media.artist) : ""}${d.media.app ? ` <span class="via">${esc(d.media.app)}</span>` : ""}</div>`
     : "";
   return `
   <div class="card compact ${d.online ? "" : "offline"}" data-id="${esc(d.id)}">
@@ -126,9 +126,12 @@ function deviceCard(d: Device, stale: boolean): string {
         <button class="btn icon" data-act="next">⏭</button>` : ""}
       ${d.backend === "roku" ? `<button class="btn icon" data-act="recal" title="Re-zero volume calibration on next set">🎯</button>` : ""}
       ${stale ? `<button class="btn danger icon" data-act="delete" title="Remove until seen again">✕</button>` : ""}
-      <label class="gain-wrap" title="Sync Gain: balance this device inside sync groups. Its actual volume = group volume × gain; it reports volume ÷ gain back to the group.">
+      <label class="gain-wrap" title="Sync Gain (0–200%, default 100%): balance this device inside sync groups. Its actual volume = group volume × gain; it reports volume ÷ gain back to the group. Example: at 50% gain, group volume 30% puts this device at 15%.">
         <span>Sync Gain</span>
-        <input type="number" min="0" max="200" step="5" value="${Math.round((d.sync_gain ?? 1) * 100)}" data-act="gain" />%
+        <div class="gain-col">
+          <input type="number" min="0" max="200" step="5" value="${Math.round((d.sync_gain ?? 1) * 100)}" data-act="gain" />
+          <div class="gain-bar"><div class="gain-fill ${((d.sync_gain ?? 1) > 1) ? "hot" : ""}" style="width:${Math.min(100, ((d.sync_gain ?? 1) * 100) / 2)}%"></div><div class="gain-mid"></div></div>
+        </div>
       </label>
     </div>
     ${media}

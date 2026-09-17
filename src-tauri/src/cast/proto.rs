@@ -25,6 +25,7 @@ pub const NS_CONNECTION: &str = "urn:x-cast:com.google.cast.tp.connection";
 pub const NS_HEARTBEAT: &str = "urn:x-cast:com.google.cast.tp.heartbeat";
 pub const NS_RECEIVER: &str = "urn:x-cast:com.google.cast.receiver";
 pub const NS_MEDIA: &str = "urn:x-cast:com.google.cast.media";
+pub const NS_MULTIZONE: &str = "urn:x-cast:com.google.cast.multizone";
 
 pub fn text_msg(dest: &str, namespace: &str, payload: &serde_json::Value) -> CastMessage {
     CastMessage {

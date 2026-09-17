@@ -24,6 +24,7 @@ pub struct CastActor {
     pub name: String, // for logging
     pub ip: String,
     pub port: u16,
+    pub is_group: bool,
     pub cmd_rx: mpsc::Receiver<DeviceCmd>,
     pub events: mpsc::Sender<CoreEvent>,
 }
@@ -93,6 +94,9 @@ impl CastActor {
             return false;
         }
         let _ = send(&mut wr, &self.id, "receiver-0", NS_RECEIVER, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await;
+        if self.is_group {
+            let _ = send(&mut wr, &self.id, "receiver-0", NS_MULTIZONE, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await;
+        }
 
         let mut heartbeat = tokio::time::interval(Duration::from_secs(5));
         let mut last_pong = tokio::time::Instant::now();
@@ -239,6 +243,19 @@ impl CastActor {
                 } else if statuses.is_empty() && state.media_session_id.is_some() {
                     // keep session; some apps send empty status on idle transitions
                 }
+            }
+            (NS_MULTIZONE, "MULTIZONE_STATUS") => {
+                let members: Vec<String> = v["status"]["devices"].as_array()
+                    .map(|ds| ds.iter()
+                        .filter_map(|d| d["deviceId"].as_str())
+                        .map(|s| s.to_lowercase().replace('-', ""))
+                        .collect())
+                    .unwrap_or_default();
+                info!(id=%self.id, name=%self.name, count=members.len(), "cast: multizone group members");
+                let _ = self.events.send(CoreEvent::GroupMembers { id: self.id.clone(), members }).await;
+            }
+            (NS_MULTIZONE, "DEVICE_ADDED") | (NS_MULTIZONE, "DEVICE_UPDATED") | (NS_MULTIZONE, "DEVICE_REMOVED") => {
+                let _ = send(wr, &self.id, "receiver-0", NS_MULTIZONE, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await;
             }
             (NS_CONNECTION, "CLOSE") => {
                 if Some(source) == state.media_transport_id.as_deref() {

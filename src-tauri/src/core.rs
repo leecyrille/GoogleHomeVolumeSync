@@ -17,6 +17,8 @@ use tracing::{info, warn};
 pub struct Entry {
     pub info: DeviceInfo,
     pub cmd: Option<mpsc::Sender<DeviceCmd>>,
+    /// For cast groups: normalized member device ids from multizone status.
+    pub group_members: Vec<String>,
 }
 
 pub struct CoreInner {
@@ -53,7 +55,7 @@ impl Core {
         for mut info in cfg.known_devices.clone() {
             info.online = false;
             info.media = None;
-            devices.insert(info.id.clone(), Entry { info, cmd: None });
+            devices.insert(info.id.clone(), Entry { info, cmd: None, group_members: Vec::new() });
         }
         info!(count = devices.len(), "core: loaded known devices from config");
         Core {
@@ -66,7 +68,30 @@ impl Core {
 
     pub fn snapshot(&self) -> Snapshot {
         let inner = self.inner.lock().unwrap();
-        let mut devices: Vec<DeviceInfo> = inner.devices.values().map(|e| e.info.clone()).collect();
+        // Overlay: members of a cast group with an active session show that
+        // session as "via <group>" when they have no session of their own.
+        let mut overlays: HashMap<String, crate::types::MediaInfo> = HashMap::new();
+        for e in inner.devices.values() {
+            if e.info.is_cast_group {
+                if let Some(media) = &e.info.media {
+                    for m in &e.group_members {
+                        let mut via = media.clone();
+                        via.app = Some(format!("via {}", e.info.custom_name.as_deref().unwrap_or(&e.info.friendly_name)));
+                        via.supports_transport = false;
+                        overlays.insert(m.clone(), via);
+                    }
+                }
+            }
+        }
+        let mut devices: Vec<DeviceInfo> = inner.devices.values().map(|e| {
+            let mut info = e.info.clone();
+            if info.media.is_none() {
+                if let Some(via) = overlays.get(&info.id.to_lowercase().replace('-', "")) {
+                    info.media = Some(via.clone());
+                }
+            }
+            info
+        }).collect();
         devices.sort_by(|a, b| {
             (b.online as u8, a.is_cast_group as u8)
                 .cmp(&(a.online as u8, b.is_cast_group as u8))
@@ -119,6 +144,7 @@ impl Core {
                         media: None,
                     },
                     cmd: None,
+                    group_members: Vec::new(),
                 }
             });
             let addr_changed = entry.info.ip != d.ip || entry.info.port != d.port;
@@ -146,17 +172,18 @@ impl Core {
 
     fn spawn_cast_actor(&self, id: &str) {
         let (tx, rx) = mpsc::channel(32);
-        let (name, ip, port) = {
+        let (name, ip, port, is_group) = {
             let mut inner = self.inner.lock().unwrap();
             let entry = inner.devices.get_mut(id).unwrap();
             entry.cmd = Some(tx);
-            (entry.info.friendly_name.clone(), entry.info.ip.clone(), entry.info.port)
+            (entry.info.friendly_name.clone(), entry.info.ip.clone(), entry.info.port, entry.info.is_cast_group)
         };
         let actor = CastActor {
             id: id.to_string(),
             name,
             ip,
             port,
+            is_group,
             cmd_rx: rx,
             events: self.event_tx.clone(),
         };
@@ -195,6 +222,7 @@ impl Core {
                     media: None,
                 },
                 cmd: None,
+                group_members: Vec::new(),
             });
             if let Some(old) = entry.cmd.take() {
                 let _ = old.try_send(DeviceCmd::Shutdown);
@@ -403,6 +431,14 @@ impl Core {
                         e.info.last_seen = now_ts();
                     }
                     inner.cfg_dirty = true;
+                }
+                drop(inner);
+                self.emit_state();
+            }
+            CoreEvent::GroupMembers { id, members } => {
+                let mut inner = self.inner.lock().unwrap();
+                if let Some(e) = inner.devices.get_mut(&id) {
+                    e.group_members = members;
                 }
                 drop(inner);
                 self.emit_state();
