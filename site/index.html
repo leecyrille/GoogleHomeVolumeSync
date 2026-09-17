@@ -35,6 +35,8 @@
     .feat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
     .feat b { color: var(--text); }
     .feat p { color: var(--dim); font-size: 14px; margin-top: 4px; }
+    .feat p.tested { font-size: 12.5px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .feat p.tested b { color: var(--dim); }
     .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
     .prod { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
     .prod h3 { font-size: 16px; }
@@ -71,7 +73,7 @@
         <div class="feat"><b>Sync Gain balancing</b><p>Set a per-device 0–200% gain so quiet corners get boosted and loud rooms stay tame.</p></div>
         <div class="feat"><b>System tray presets</b><p>Right-click the tray icon and set any group to 5%…100% in two clicks, plus play/pause controls.</p></div>
         <div class="feat"><b>Scheduler</b><p>Quiet the house at bedtime: weekly day/time rules that set volumes for groups or single devices.</p></div>
-        <div class="feat"><b>More than Google</b><p>Also controls Roku TVs, Yamaha MusicCast receivers, LG TVs and more, in the same sync groups.</p></div>
+        <div class="feat"><b>More than Google</b><p>Also controls Roku TVs, Yamaha MusicCast receivers, LG webOS TVs and Optoma projectors, in the same sync groups.</p><p class="tested">Roku is tested on real hardware. The Yamaha, LG and Optoma backends are written to spec but <b>untested</b> — reports welcome.</p></div>
       </div>
     </section>
 

@@ -1,5 +1,7 @@
 # Unofficial Google Home Volume Sync
 
+**Website: [googlehomevolumesync.com](https://googlehomevolumesync.com)**
+
 A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control — fully local, no cloud APIs.
 
 
@@ -22,13 +24,15 @@ A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast de
 
 ### Additional device backends
 
-| Backend | Discovery | Volume | Notes |
-|---|---|---|---|
-| Google Cast | automatic (mDNS) | absolute | primary backend |
-| Roku TV | "Scan for Roku TVs" (SSDP) | pseudo-absolute | emulated via keypress ramping with a cached level; Recalibrate button re-zeros |
-| Yamaha MusicCast (e.g. RX-V581) | add by IP | absolute | Yamaha Extended Control JSON API |
-| LG webOS TV | add by IP | absolute | one-time on-screen pairing prompt |
-| Optoma projector | add by IP | absolute (0–10 range) | RS-232-over-Telnet, experimental |
+| Backend | Discovery | Volume | Hardware tested | Notes |
+|---|---|---|---|---|
+| Google Cast | automatic (mDNS) | absolute | yes | primary backend |
+| Roku TV | "Scan for Roku TVs" (SSDP) | pseudo-absolute | yes | emulated via keypress ramping with a cached level; Recalibrate button re-zeros |
+| Yamaha MusicCast (e.g. RX-V581) | add by IP | absolute | **no** | Yamaha Extended Control JSON API |
+| LG webOS TV | add by IP | absolute | **no** | one-time on-screen pairing prompt |
+| Optoma projector | add by IP | absolute (0–10 range) | **no** | RS-232-over-Telnet, experimental |
+
+The Yamaha MusicCast, LG webOS and Optoma backends are written to their published protocols but have **not been tried against real hardware** — expect them to need fixes on first use. Bug reports from anyone who owns these are very welcome. The Roku backend has been tested and works.
 
 ## Development
 

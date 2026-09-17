@@ -26,3 +26,6 @@ dist-ssr
 dist/
 *.key
 
+# Cloudflare Pages deploy cache
+.wrangler/
+
