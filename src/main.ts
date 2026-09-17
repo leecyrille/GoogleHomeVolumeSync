@@ -76,8 +76,10 @@ function renderDevices() {
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
     </div>
-    ${section("Devices", state.devices.filter((d) => !d.is_cast_group), stale)}
+    ${section("Devices", state.devices.filter((d) => !d.is_cast_group && d.backend === "cast"), stale)}
     ${section("Google Cast Groups", state.devices.filter((d) => d.is_cast_group), stale)}
+    ${section("Roku TVs", state.devices.filter((d) => d.backend === "roku"), stale)}
+    ${section("Other Devices", state.devices.filter((d) => !["cast", "roku"].includes(d.backend)), stale)}
     ${state.devices.length === 0 ? `<div class="hint">Searching for Google Cast devices on your network…</div>` : ""}
   `;
   content.innerHTML = html;
