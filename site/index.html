@@ -37,12 +37,32 @@
     .feat p { color: var(--dim); font-size: 14px; margin-top: 4px; }
     .feat p.tested { font-size: 12.5px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
     .feat p.tested b { color: var(--dim); }
-    .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-    .prod { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
-    .prod h3 { font-size: 16px; }
-    .prod p { color: var(--dim); font-size: 13.5px; flex: 1; }
-    .prod a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: 14px; }
-    .prod a:hover { text-decoration: underline; }
+    .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+    .azcard {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 15px 16px;
+      display: flex; flex-direction: column; gap: 9px; text-decoration: none; color: inherit;
+      transition: border-color .15s, transform .15s;
+    }
+    .azcard:hover { border-color: #ffa41c; transform: translateY(-1px); }
+    .azcard:hover .azbtn { background: #f7ca00; color: #1a1305; }
+    .azrow { display: flex; gap: 11px; align-items: flex-start; }
+    .azimg { width: 64px; height: 64px; flex: none; object-fit: contain; background: #fff; border-radius: 6px; }
+    .azicon {
+      width: 64px; height: 64px; flex: none; border-radius: 6px; background: var(--panel);
+      border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 26px;
+    }
+    .aztitle { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--text); }
+    .azstars { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .azstars b { color: var(--text); }
+    .stars { position: relative; display: inline-block; font-size: 13px; line-height: 1; color: #46525f; letter-spacing: 1px; }
+    .stars .fill { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; color: #ffa41c; letter-spacing: 1px; }
+    .azstars .count { color: var(--dim); font-size: 11.5px; }
+    .azwhy { font-size: 12.5px; color: var(--dim); line-height: 1.45; flex: 1; }
+    .azbtn {
+      align-self: flex-start; background: transparent; border: 1px solid #ffa41c; color: #ffc066;
+      border-radius: 7px; padding: 7px 14px; font-size: 13px; font-weight: 600; transition: background .15s, color .15s;
+    }
+    .azdisclosure { margin: 14px auto 0; max-width: 720px; font-size: 11.5px; color: var(--dim); line-height: 1.5; text-align: center; }
     .donate { text-align: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 26px; }
     footer { padding: 34px 0 44px; color: var(--dim); font-size: 12.5px; text-align: center; border-top: 1px solid var(--border); margin-top: 20px; }
     footer a { color: var(--accent); }
@@ -80,37 +100,57 @@
     <section>
       <h2>Hardware that pairs well with it</h2>
       <div class="products">
-        <div class="prod">
-          <h3>Intel N100 Mini PC (Windows 11)</h3>
-          <p>A tiny ~6W always-on PC is perfect for running the sync service 24/7 — silent, cheap, and it disappears behind a monitor or on a shelf.</p>
-          <a href="https://www.amazon.com/s?k=intel+n100+mini+pc+windows+11&tag=flowerfrogmak-20" rel="nofollow sponsored">Shop N100 mini PCs on Amazon →</a>
-        </div>
-        <div class="prod">
-          <h3>Google Nest Mini (2nd gen)</h3>
-          <p>The cheapest way to put synced audio in every room.</p>
-          <a href="https://www.amazon.com/s?k=google+nest+mini+2nd+generation&tag=flowerfrogmak-20" rel="nofollow sponsored">Shop Nest Mini on Amazon →</a>
-        </div>
-        <div class="prod">
-          <h3>Google Nest Audio</h3>
-          <p>Bigger sound for living spaces; pairs into stereo sets that this app treats as one device.</p>
-          <a href="https://www.amazon.com/s?k=google+nest+audio+speaker&tag=flowerfrogmak-20" rel="nofollow sponsored">Shop Nest Audio on Amazon →</a>
-        </div>
-        <div class="prod">
-          <h3>Google Nest Hub (2nd gen)</h3>
-          <p>A screen for the kitchen or bedside — shows what's playing and joins sync groups like any speaker.</p>
-          <a href="https://www.amazon.com/s?k=google+nest+hub+2nd+gen&tag=flowerfrogmak-20" rel="nofollow sponsored">Shop Nest Hub on Amazon →</a>
-        </div>
-        <div class="prod">
-          <h3>Google Nest Hub Max</h3>
-          <p>The big-screen, big-speaker option for the main room.</p>
-          <a href="https://www.amazon.com/s?k=google+nest+hub+max&tag=flowerfrogmak-20" rel="nofollow sponsored">Shop Nest Hub Max on Amazon →</a>
-        </div>
-        <div class="prod">
-          <h3>Chromecast with Google TV</h3>
-          <p>Brings your TV into the same volume groups and schedules.</p>
-          <a href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=flowerfrogmak-20" rel="nofollow sponsored">Shop Chromecast on Amazon →</a>
-        </div>
+        <a class="azcard" href="https://www.amazon.com/dp/B0FC4GVSYQ?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <img class="azimg" src="https://m.media-amazon.com/images/I/81uMte8VLAL._AC_SX300_.jpg" alt="Google Nest Audio three-pack bundle product photo" loading="lazy" width="64" height="64">
+            <span class="aztitle">Google Nest Audio (3-Pack) &mdash; Multi-Room Smart Speaker Bundle</span>
+          </span>
+          <span class="azstars"><span class="stars"><span class="fill" style="width:90%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.5</b> <span class="count">(214 ratings)</span></span>
+          <span class="azwhy">Three full-size Nest Audio speakers &mdash; enough to cover a living room, kitchen and bedroom in one go, and they pair into stereo sets this app treats as one device. Sold by the Google Store.</span>
+          <span class="azbtn">View on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/s?k=intel+n100+mini+pc+windows+11&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <span class="azicon" aria-hidden="true">🖥️</span>
+            <span class="aztitle">Intel N100 Mini PC (Windows 11)</span>
+          </span>
+          <span class="azwhy">A tiny ~6&nbsp;W always-on PC is perfect for running the sync service 24/7 &mdash; silent, cheap, and it disappears behind a monitor or on a shelf. Plenty of near-identical models, so compare on price.</span>
+          <span class="azbtn">Browse on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/s?k=google+nest+mini+2nd+generation&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <span class="azicon" aria-hidden="true">🔊</span>
+            <span class="aztitle">Google Nest Mini (2nd gen)</span>
+          </span>
+          <span class="azwhy">The cheapest way to put synced audio in every room. Google has wound this one down, so what is left is mostly used and third-party stock &mdash; check the seller before you buy.</span>
+          <span class="azbtn">Browse on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/s?k=google+nest+hub+2nd+gen&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <span class="azicon" aria-hidden="true">🖼️</span>
+            <span class="aztitle">Google Nest Hub (2nd gen)</span>
+          </span>
+          <span class="azwhy">A screen for the kitchen or bedside &mdash; shows what&rsquo;s playing and joins sync groups like any speaker. Availability comes and goes, so it is worth watching the listings.</span>
+          <span class="azbtn">Browse on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/s?k=google+nest+hub+max&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <span class="azicon" aria-hidden="true">📺</span>
+            <span class="aztitle">Google Nest Hub Max</span>
+          </span>
+          <span class="azwhy">The big-screen, big-speaker option for the main room. Mostly imported stock on Amazon now &mdash; check the region and plug type before ordering.</span>
+          <span class="azbtn">Browse on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <span class="azicon" aria-hidden="true">📡</span>
+            <span class="aztitle">Chromecast with Google TV (4K)</span>
+          </span>
+          <span class="azwhy">Brings your TV into the same volume groups and schedules. Current listings are mostly resellers rather than the Google Store, so compare prices carefully.</span>
+          <span class="azbtn">Browse on Amazon</span>
+        </a>
       </div>
+      <p class="azdisclosure">Affiliate links — we may earn a commission at no extra cost to you. This is an independent site, not associated with Google or any seller. Star rating shown as of September 2026; cards without a rating link to an Amazon search because there is no current first-party listing to point at.</p>
     </section>
 
     <section>
