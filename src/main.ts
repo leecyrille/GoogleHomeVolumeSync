@@ -217,7 +217,7 @@ function groupCard(g: Group): string {
       <button class="btn icon" data-act="gnext">⏭</button>
     </div>
     <div class="member-list">
-      ${state.devices.map((d) => `
+      ${state.devices.filter((d) => !d.is_cast_group).map((d) => `
         <label class="chk"><input type="checkbox" data-member="${esc(d.id)}" ${g.member_ids.includes(d.id) ? "checked" : ""} /> ${esc(displayName(d))}</label>
       `).join("")}
     </div>
