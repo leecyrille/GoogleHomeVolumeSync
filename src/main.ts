@@ -147,7 +147,7 @@ function wireDeviceCard(d: Device) {
   if (slider) {
     const pctEl = card.querySelector(".vol-pct")!;
     slider.addEventListener("pointerdown", () => dragging.add(d.id));
-    slider.addEventListener("pointerup", () => setTimeout(() => dragging.delete(d.id), 800));
+    slider.addEventListener("pointerup", () => setTimeout(() => { dragging.delete(d.id); renderIfPending(); }, 800));
     slider.addEventListener("input", () => {
       pctEl.textContent = `${slider.value}%`;
       debounce(`vol:${d.id}`, 180, () => invoke("set_volume", { id: d.id, level: Number(slider.value) / 100 }));
@@ -239,7 +239,7 @@ function wireGroupCard(g: Group) {
   const slider = card.querySelector('[data-act="gvol"]') as HTMLInputElement;
   const pctEl = card.querySelector(".vol-pct")!;
   slider.addEventListener("pointerdown", () => dragging.add("g:" + g.id));
-  slider.addEventListener("pointerup", () => setTimeout(() => dragging.delete("g:" + g.id), 800));
+  slider.addEventListener("pointerup", () => setTimeout(() => { dragging.delete("g:" + g.id); renderIfPending(); }, 800));
   slider.addEventListener("input", () => {
     pctEl.textContent = `${slider.value}%`;
     debounce(`gvol:${g.id}`, 200, () => invoke("set_group_volume", { groupId: g.id, level: Number(slider.value) / 100 }));
@@ -420,13 +420,44 @@ document.querySelectorAll(".nav-btn").forEach((btn) => {
   });
 });
 
+let pendingRender = false;
+
 listen<Snapshot>("state", (e) => {
   state = e.payload;
-  // Avoid clobbering UI while user drags a slider or edits text.
+  // Avoid clobbering UI while user drags a slider or edits text - but still
+  // live-update the OTHER sliders so sync is visible during a drag.
   const active = document.activeElement;
   const editing = active instanceof HTMLInputElement && (active.type === "text" || active.type === "time" || active.type === "number");
-  if (dragging.size === 0 && !editing && view !== "log") render();
+  if (dragging.size === 0 && !editing && view !== "log") {
+    pendingRender = false;
+    render();
+  } else if (view !== "log") {
+    pendingRender = true;
+    updateSlidersInPlace();
+  }
 });
+
+function updateSlidersInPlace() {
+  for (const d of state.devices) {
+    if (dragging.has(d.id)) continue;
+    const card = content.querySelector(`.card[data-id="${CSS.escape(d.id)}"]`);
+    if (!card) continue;
+    const slider = card.querySelector('[data-act="vol"]') as HTMLInputElement | null;
+    const pctEl = card.querySelector(".vol-pct");
+    if (slider && document.activeElement !== slider) {
+      const pct = Math.round(d.volume * 100);
+      slider.value = String(pct);
+      if (pctEl) pctEl.textContent = `${pct}%`;
+    }
+  }
+}
+
+function renderIfPending() {
+  if (pendingRender && dragging.size === 0) {
+    pendingRender = false;
+    render();
+  }
+}
 
 invoke<Snapshot>("get_state").then((s) => { state = s; render(); maybeCheckUpdates(); });
 
