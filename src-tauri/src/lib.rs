@@ -47,6 +47,7 @@ pub fn run() {
             commands::set_muted,
             commands::media_cmd,
             commands::rename_device,
+            commands::set_sync_gain,
             commands::delete_device,
             commands::recalibrate_roku,
             commands::save_groups,

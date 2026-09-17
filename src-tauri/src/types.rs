@@ -35,6 +35,11 @@ pub struct DeviceInfo {
     pub volume: f32,    // 0.0..1.0
     pub muted: bool,
     pub can_absolute_volume: bool,
+    /// Per-device balance multiplier (0.0..2.0, default 1.0). Actual volume =
+    /// group/logical volume x gain; the device reports logical = actual / gain
+    /// to the group for sync purposes.
+    #[serde(default = "default_gain")]
+    pub sync_gain: f32,
     #[serde(default)]
     pub media: Option<MediaInfo>,
 }
@@ -71,6 +76,9 @@ pub struct AppGroup {
 }
 fn default_volume() -> f32 {
     0.5
+}
+pub fn default_gain() -> f32 {
+    1.0
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

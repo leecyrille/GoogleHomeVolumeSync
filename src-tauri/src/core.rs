@@ -115,6 +115,7 @@ impl Core {
                         volume: 0.0,
                         muted: false,
                         can_absolute_volume: true,
+                        sync_gain: 1.0,
                         media: None,
                     },
                     cmd: None,
@@ -190,6 +191,7 @@ impl Core {
                     volume: 0.0,
                     muted: false,
                     can_absolute_volume: can_abs,
+                    sync_gain: 1.0,
                     media: None,
                 },
                 cmd: None,
@@ -291,19 +293,40 @@ impl Core {
         self.send_cmd(id, DeviceCmd::SetVolume(level));
     }
 
+    fn gain_of(inner: &CoreInner, id: &str) -> f32 {
+        inner.devices.get(id).map(|e| e.info.sync_gain).unwrap_or(1.0)
+    }
+
     pub fn set_group_volume(&self, group_id: &str, level: f32) {
-        let members = {
+        // `level` is the group's logical volume; each member gets level x gain.
+        let targets: Vec<(String, f32)> = {
             let mut inner = self.inner.lock().unwrap();
             let Some(g) = inner.cfg.groups.iter_mut().find(|g| g.id == group_id) else { return };
             g.group_volume = level;
             let members = g.member_ids.clone();
             inner.cfg_dirty = true;
-            members
+            members.iter()
+                .map(|m| (m.clone(), (level * Self::gain_of(&inner, m)).clamp(0.0, 1.0)))
+                .collect()
         };
-        info!(group=%group_id, level, members=?members, "core: set group volume");
-        for m in members {
-            self.set_device_volume(&m, level, true);
+        info!(group=%group_id, level, targets=?targets, "core: set group volume");
+        for (m, v) in targets {
+            self.set_device_volume(&m, v, true);
         }
+        self.emit_state();
+    }
+
+    pub fn set_sync_gain(&self, id: &str, gain: f32) {
+        let gain = gain.clamp(0.0, 2.0);
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if let Some(e) = inner.devices.get_mut(id) {
+                info!(id=%id, old=e.info.sync_gain, new=gain, "core: sync gain changed");
+                e.info.sync_gain = gain;
+            }
+            inner.cfg_dirty = true;
+        }
+        self.save_config();
         self.emit_state();
     }
 
@@ -334,32 +357,36 @@ impl Core {
     }
 
     /// UI-originated volume change: set the device and mirror to synced peers.
+    /// `level` is the device's ACTUAL volume; peers get logical x their gain,
+    /// where logical = level / this device's gain.
     pub fn set_device_volume_from_ui(&self, id: &str, level: f32) {
-        let peers: Vec<String> = {
+        let peers: Vec<(String, f32)> = {
             let mut inner = self.inner.lock().unwrap();
-            let mut peers = Vec::new();
+            let logical = (level / Self::gain_of(&inner, id).max(0.05)).clamp(0.0, 1.0);
+            let mut peers: Vec<(String, f32)> = Vec::new();
             let groups: Vec<AppGroup> = inner.cfg.groups.iter()
-                .filter(|g| g.sync_enabled && g.member_ids.contains(&id.to_string()))
+                .filter(|g| g.member_ids.contains(&id.to_string()))
                 .cloned().collect();
             for g in groups {
                 if let Some(gm) = inner.cfg.groups.iter_mut().find(|x| x.id == g.id) {
-                    gm.group_volume = level;
+                    gm.group_volume = logical;
                 }
                 for m in &g.member_ids {
-                    if m.as_str() != id && !peers.contains(m) {
-                        peers.push(m.clone());
+                    if m.as_str() != id && !peers.iter().any(|(p, _)| p == m) {
+                        let target = (logical * Self::gain_of(&inner, m)).clamp(0.0, 1.0);
+                        peers.push((m.clone(), target));
                     }
                 }
             }
             if !peers.is_empty() {
-                info!(id=%id, level, ?peers, "core: sync - mirroring UI volume change to group peers");
+                info!(id=%id, level, logical, ?peers, "core: sync - mirroring UI volume change to group peers");
                 inner.cfg_dirty = true;
             }
             peers
         };
         self.set_device_volume(id, level, true);
-        for p in peers {
-            self.set_device_volume(&p, level, true);
+        for (p, v) in peers {
+            self.set_device_volume(&p, v, true);
         }
         self.emit_state();
     }
@@ -416,20 +443,24 @@ impl Core {
                         if is_echo {
                             inner.pending.remove(&id);
                         } else if changed && old.is_some() {
-                            // External change: propagate to synced groups.
+                            // External change: propagate to sync groups.
+                            // Logical volume = actual / source gain; each peer
+                            // gets logical x its own gain.
+                            let logical = (volume / Self::gain_of(&inner, &id).max(0.05)).clamp(0.0, 1.0);
                             let groups: Vec<AppGroup> = inner.cfg.groups.iter()
-                                .filter(|g| g.sync_enabled && g.member_ids.contains(&id))
+                                .filter(|g| g.member_ids.contains(&id))
                                 .cloned().collect();
                             for g in groups {
-                                info!(group=%g.name, source=%id, volume, "core: sync - propagating external volume change");
+                                info!(group=%g.name, source=%id, volume, logical, "core: sync - propagating external volume change");
                                 if let Some(gm) = inner.cfg.groups.iter_mut().find(|x| x.id == g.id) {
-                                    gm.group_volume = volume;
+                                    gm.group_volume = logical;
                                 }
                                 for m in &g.member_ids {
                                     if m != &id {
+                                        let target = (logical * Self::gain_of(&inner, m)).clamp(0.0, 1.0);
                                         let cur = inner.devices.get(m).map(|e| e.info.volume).unwrap_or(-1.0);
-                                        if (cur - volume).abs() > 0.01 {
-                                            sync_targets.push((m.clone(), volume));
+                                        if (cur - target).abs() > 0.01 {
+                                            sync_targets.push((m.clone(), target));
                                         }
                                     }
                                 }

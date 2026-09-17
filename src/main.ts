@@ -25,6 +25,7 @@ interface Device {
   volume: number;
   muted: boolean;
   can_absolute_volume: boolean;
+  sync_gain: number;
   media?: MediaInfo;
 }
 interface Group {
@@ -125,6 +126,10 @@ function deviceCard(d: Device, stale: boolean): string {
         <button class="btn icon" data-act="next">⏭</button>` : ""}
       ${d.backend === "roku" ? `<button class="btn icon" data-act="recal" title="Re-zero volume calibration on next set">🎯</button>` : ""}
       ${stale ? `<button class="btn danger icon" data-act="delete" title="Remove until seen again">✕</button>` : ""}
+      <label class="gain-wrap" title="Sync Gain: balance this device inside sync groups. Its actual volume = group volume × gain; it reports volume ÷ gain back to the group.">
+        <span>Sync Gain</span>
+        <input type="number" min="0" max="200" step="5" value="${Math.round((d.sync_gain ?? 1) * 100)}" data-act="gain" />%
+      </label>
     </div>
     ${media}
   </div>`;
@@ -148,6 +153,11 @@ function wireDeviceCard(d: Device) {
   q('[data-act="mute"]')?.addEventListener("click", () => invoke("set_muted", { id: d.id, muted: !d.muted }));
   q('[data-act="delete"]')?.addEventListener("click", () => invoke("delete_device", { id: d.id }));
   q('[data-act="recal"]')?.addEventListener("click", () => invoke("recalibrate_roku", { id: d.id }));
+  const gainInput = q('[data-act="gain"]') as HTMLInputElement | null;
+  gainInput?.addEventListener("change", () => {
+    const pct = Math.max(0, Math.min(200, Number(gainInput.value) || 100));
+    invoke("set_sync_gain", { id: d.id, gain: pct / 100 });
+  });
   for (const act of ["play", "pause", "next", "prev"]) {
     q(`[data-act="${act}"]`)?.addEventListener("click", () => invoke("media_cmd", { id: d.id, action: act }));
   }
@@ -173,15 +183,15 @@ function showAddManual() {
 
 function renderGroups() {
   content.innerHTML = `
-    <h2>Groups <span class="sub">app groups — independent of Google cast groups</span></h2>
-    <div class="toolbar"><button class="btn primary" id="add-group">+ New Group</button></div>
+    <h2>Sync Groups <span class="sub">members' volumes stay matched — independent of Google cast groups</span></h2>
+    <div class="toolbar"><button class="btn primary" id="add-group">+ New Sync Group</button></div>
     ${state.groups.map((g) => groupCard(g)).join("")}
-    ${state.groups.length === 0 ? `<div class="hint">Create a group to control several devices with one slider, sync their volumes, and get quick tray presets.</div>` : ""}
+    ${state.groups.length === 0 ? `<div class="hint">Create a sync group to control several devices with one slider, keep their volumes in sync, and get quick tray presets.</div>` : ""}
   `;
   document.getElementById("add-group")!.addEventListener("click", () => {
-    const name = prompt("Group name:");
+    const name = prompt("Sync group name:");
     if (!name) return;
-    const groups = [...state.groups, { id: crypto.randomUUID(), name, member_ids: [], sync_enabled: false, group_volume: 0.5 }];
+    const groups = [...state.groups, { id: crypto.randomUUID(), name, member_ids: [], sync_enabled: true, group_volume: 0.5 }];
     invoke("save_groups", { groups });
   });
   for (const g of state.groups) wireGroupCard(g);
@@ -193,9 +203,6 @@ function groupCard(g: Group): string {
   <div class="card" data-gid="${esc(g.id)}">
     <div class="row">
       <div class="dev-name grow"><input value="${esc(g.name)}" data-act="gname" /></div>
-      <label class="chk" title="If one member's volume changes, force all others to match">
-        <input type="checkbox" data-act="sync" ${g.sync_enabled ? "checked" : ""} /> Sync volume
-      </label>
       <button class="btn danger" data-act="gdel">Delete</button>
     </div>
     <div class="row" style="margin-top:10px">
@@ -220,10 +227,6 @@ function wireGroupCard(g: Group) {
 
   (card.querySelector('[data-act="gname"]') as HTMLInputElement).addEventListener("change", (e) => {
     g.name = (e.target as HTMLInputElement).value.trim() || g.name;
-    saveGroups();
-  });
-  (card.querySelector('[data-act="sync"]') as HTMLInputElement).addEventListener("change", (e) => {
-    g.sync_enabled = (e.target as HTMLInputElement).checked;
     saveGroups();
   });
   card.querySelector('[data-act="gdel"]')!.addEventListener("click", () => {

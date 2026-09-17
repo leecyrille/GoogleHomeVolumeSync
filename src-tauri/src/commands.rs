@@ -56,6 +56,11 @@ pub fn rename_device(core: CoreState, id: String, name: Option<String>) {
 }
 
 #[tauri::command]
+pub fn set_sync_gain(core: CoreState, id: String, gain: f32) {
+    core.set_sync_gain(&id, gain);
+}
+
+#[tauri::command]
 pub fn delete_device(core: CoreState, id: String) {
     core.delete_device(&id);
 }
@@ -132,6 +137,7 @@ pub fn import_config(app: tauri::AppHandle, core: CoreState, path: String) -> Re
         for imported in &cfg.known_devices {
             if let Some(e) = inner.devices.get_mut(&imported.id) {
                 e.info.custom_name = imported.custom_name.clone();
+                e.info.sync_gain = imported.sync_gain;
             } else {
                 let mut info = imported.clone();
                 info.online = false;
