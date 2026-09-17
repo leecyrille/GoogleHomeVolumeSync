@@ -1,0 +1,44 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pacto Cast Sync icon: three speakers pulsing in sync -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#141d27"/>
+      <stop offset="1" stop-color="#0b1016"/>
+    </linearGradient>
+    <linearGradient id="ac" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#45c6f5"/>
+      <stop offset="1" stop-color="#1b8ec7"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="210" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="210" fill="none" stroke="#29abe2" stroke-opacity="0.25" stroke-width="14"/>
+
+  <!-- central shared sound wave arcs (the "sync" - one wave shared by all) -->
+  <g stroke="url(#ac)" fill="none" stroke-linecap="round">
+    <circle cx="512" cy="470" r="130" stroke-width="34" stroke-opacity="0.95"/>
+    <circle cx="512" cy="470" r="220" stroke-width="30" stroke-opacity="0.55" stroke-dasharray="230 116"/>
+    <circle cx="512" cy="470" r="310" stroke-width="26" stroke-opacity="0.30" stroke-dasharray="200 125"/>
+  </g>
+  <circle cx="512" cy="470" r="52" fill="url(#ac)"/>
+
+  <!-- three speaker nodes on the wave, all "hearing" the same level -->
+  <g fill="#dce8f2">
+    <circle cx="512" cy="470" r="0"/>
+  </g>
+  <g fill="url(#ac)">
+    <circle cx="262" cy="700" r="64"/>
+    <circle cx="512" cy="800" r="64"/>
+    <circle cx="762" cy="700" r="64"/>
+  </g>
+  <!-- equal-level bars inside each node = matched volume -->
+  <g stroke="#0b1016" stroke-width="22" stroke-linecap="round">
+    <line x1="262" y1="676" x2="262" y2="724"/>
+    <line x1="512" y1="776" x2="512" y2="824"/>
+    <line x1="762" y1="676" x2="762" y2="724"/>
+  </g>
+  <!-- connectors: nodes locked together -->
+  <g stroke="url(#ac)" stroke-width="26" stroke-linecap="round" stroke-opacity="0.7">
+    <line x1="318" y1="726" x2="454" y2="782"/>
+    <line x1="570" y1="782" x2="706" y2="726"/>
+  </g>
+</svg>

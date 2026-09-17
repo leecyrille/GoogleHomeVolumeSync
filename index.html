@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pacto Cast Sync</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div id="app">
+      <nav id="sidebar">
+        <div class="nav-title">Cast Sync</div>
+        <button class="nav-btn active" data-view="devices">Devices</button>
+        <button class="nav-btn" data-view="groups">Groups</button>
+        <button class="nav-btn" data-view="schedule">Schedule</button>
+        <button class="nav-btn" data-view="log">Log</button>
+        <button class="nav-btn" data-view="settings">Settings</button>
+        <div class="sidebar-spacer"></div>
+        <img id="brand-logo" src="/src/assets/pacto-logo.png" alt="Pacto Tech" />
+      </nav>
+      <main id="content"></main>
+    </div>
+  </body>
+</html>
