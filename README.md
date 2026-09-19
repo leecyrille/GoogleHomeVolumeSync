@@ -1,6 +1,6 @@
 # Unofficial Google Home Volume Sync
 
-**Website: [googlehomevolumesync.com](https://googlehomevolumesync.com)**
+**Website: [googlehomevolumesync.com](https://googlehomevolumesync.com)** &nbsp;&middot;&nbsp; **[Download for Windows](https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe)** &nbsp;&middot;&nbsp; **[&#9749; Buy me a coffee](https://pactotech.com/products/google-home-volume-sync-tip-jar)**
 
 A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control — fully local, no cloud APIs.
 
@@ -51,6 +51,10 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 | Optoma projector | add by IP | absolute (0–10 range) | **no** | RS-232-over-Telnet, experimental |
 
 The Yamaha MusicCast, LG webOS and Optoma backends are written to their published protocols but have **not been tried against real hardware** — expect them to need fixes on first use. Bug reports from anyone who owns these are very welcome. The Roku backend has been tested and works.
+
+## Support the project
+
+This app is free and open source, built by one person. If it made your house sound better, a small tip keeps it that way: **[Buy me a coffee](https://pactotech.com/products/google-home-volume-sync-tip-jar)** (tip jar on the Pacto Tech store, pick any amount).
 
 ## Development
 
