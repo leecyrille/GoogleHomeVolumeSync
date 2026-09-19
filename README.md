@@ -4,14 +4,32 @@
 
 A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control — fully local, no cloud APIs.
 
+## Screenshots
 
+Every speaker on the network, with live volume sliders and a per-device Sync Gain for balancing rooms:
+
+![Devices](docs/screenshots/devices.png)
+
+Sync groups keep their members' volumes matched — change one anywhere and the rest follow:
+
+![Sync Groups](docs/screenshots/groups.png)
+
+Right-click the tray icon to set a whole group in 5% steps without opening the app:
+
+<img src="docs/screenshots/tray.png" width="330" alt="Tray menu">
+
+Weekly schedules quiet the house on your terms, and settings keep it starting with Windows:
+
+![Schedule](docs/screenshots/schedule.png)
+
+![Settings](docs/screenshots/settings.png)
 
 ## Features
 
 - **Auto-discovery** of all Google Cast devices (Home/Nest speakers, Chromecasts, cast-enabled TVs, cast groups) via continuous mDNS browsing — new devices just appear.
 - **Per-device volume sliders** with live updates (changes made on the speaker or in the Google Home app reflect immediately).
-- **App groups**: put any devices in a group, control them with one slider.
-- **Volume sync**: optional per-group — if one member's volume changes, the others are forced to match.
+- **Sync groups**: put any devices in a group and control them with one slider; if one member's volume changes — in the app, in the Google Home app, or on the speaker itself — the others are forced to match.
+- **Sync Gain** (0–200% per device): balance rooms against each other. A device at 50% gain sits at half the group's level and reports its own changes back at double, so groups stay consistent while quiet or loud rooms are corrected.
 - **Media controls**: play / pause / next / previous for active sessions.
 - **Scheduler**: weekly events (day-of-week checkboxes + time) that set volumes on devices or groups; each event has an enable checkbox.
 - **System tray**: right-click → pick a group → set volume in 5% steps, or send transport commands. Open App / Exit. Close button hides to tray.

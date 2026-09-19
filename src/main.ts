@@ -373,7 +373,7 @@ function renderSettings() {
     </div>
     <div class="card">
       <label class="chk"><input type="checkbox" id="set-update" ${state.settings.auto_update ? "checked" : ""} /> Automatic updates (checks GitHub releases)</label>
-      <div class="hint">Updates will be available once a public releases repo is published.</div>
+      <div class="hint">Checks this project's GitHub releases on startup and offers to install newer versions.</div>
     </div>
     <div class="card">
       <div class="row">
