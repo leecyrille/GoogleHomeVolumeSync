@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { save, open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
+
+const DONATE_URL = "https://pactotech.com/products/google-home-volume-sync-tip-jar";
+const SITE_URL = "https://googlehomevolumesync.com";
+const REPO_URL = "https://github.com/leecyrille/GoogleHomeVolumeSync";
 
 type Backend = "cast" | "roku" | "yamaha" | "lg" | "optoma";
 
@@ -381,7 +386,18 @@ function renderSettings() {
         <button class="btn" id="cfg-import">Import config…</button>
       </div>
       <div class="hint">Exports devices, custom names, groups and schedules as a JSON file.</div>
+    </div>
+    <div class="card">
+      <div class="support-row">
+        <button class="btn donate" id="support-donate">&#9749; Buy me a coffee</button>
+        <button class="btn" id="support-site">Website</button>
+        <button class="btn" id="support-repo">Source on GitHub</button>
+      </div>
+      <div class="hint">This app is free and open source. If it made your house sound better, a small tip keeps it that way. Links open in your browser.</div>
     </div>`;
+  document.getElementById("support-donate")!.addEventListener("click", () => openUrl(DONATE_URL));
+  document.getElementById("support-site")!.addEventListener("click", () => openUrl(SITE_URL));
+  document.getElementById("support-repo")!.addEventListener("click", () => openUrl(REPO_URL));
   const push = () => invoke("set_settings", { settings: {
     start_with_windows: (document.getElementById("set-autostart") as HTMLInputElement).checked,
     auto_update: (document.getElementById("set-update") as HTMLInputElement).checked,
@@ -475,3 +491,7 @@ async function maybeCheckUpdates() {
     // No releases published yet or offline - silently ignore.
   }
 }
+
+// sidebar footer links (present on every view)
+document.getElementById("nav-donate")?.addEventListener("click", () => openUrl(DONATE_URL));
+document.getElementById("nav-site")?.addEventListener("click", () => openUrl(SITE_URL));

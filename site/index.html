@@ -3,169 +3,334 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Unofficial Google Home Volume Sync — keep speaker volumes matched</title>
-  <meta name="description" content="Free Windows app that keeps Google Home / Nest speaker volumes in sync across your house. Runs locally, no cloud.">
+  <title>Google Home Volume Sync — keep every speaker at the same volume</title>
+  <meta name="description" content="Free, open-source Windows app that keeps Google Home and Nest speaker volumes in sync across your house. Runs 100% locally — no cloud, no account.">
+  <link rel="icon" href="icon.png" type="image/png">
+  <link rel="apple-touch-icon" href="icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Google Home Volume Sync — every speaker at the same volume">
+  <meta property="og:description" content="Free Windows app that keeps Google Home / Nest speaker volumes matched across your home. Local only, open source.">
+  <meta property="og:url" content="https://googlehomevolumesync.com/">
+  <meta property="og:image" content="https://googlehomevolumesync.com/screenshots/devices.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f1419; --panel: #171e26; --card: #1d2733; --border: #2b3a4b;
-      --text: #dce8f2; --dim: #7b8ea0; --accent: #4c8df6; --accent2: #6ea8ff; --ok: #3fce7b;
+      --bg: #0f1419; --panel: #171e26; --card: #1d2733; --card2: #243141; --border: #2b3a4b;
+      --text: #e6eef7; --dim: #8a9db0; --accent: #4c8df6; --accent2: #7fb0ff; --ok: #3fce7b;
+      --amber: #ffb02e; --amber-border: #7a5a1c; --r: 14px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.6; }
-    .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px; }
-    header { padding: 64px 0 40px; text-align: center; }
-    h1 { font-size: 34px; line-height: 1.2; }
-    h1 .unofficial { display: block; font-size: 14px; color: var(--dim); font-weight: 400; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
-    .desc {
-      margin: 22px auto 0; max-width: 700px; font-size: 17px; color: var(--text);
-      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px;
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased;
+      font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
     }
-    .cta { margin-top: 28px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(900px 520px at 82% -10%, rgba(76,141,246,.22), transparent 60%),
+        radial-gradient(700px 420px at -5% 45%, rgba(76,141,246,.08), transparent 60%);
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+    a { color: var(--accent2); }
+    img { max-width: 100%; }
+
+    /* ---- nav ---- */
+    .nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(15,20,25,.78); border-bottom: 1px solid var(--border); }
+    .nav .wrap { display: flex; align-items: center; gap: 18px; height: 62px; }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; text-decoration: none; color: var(--text); font-size: 15px; line-height: 1.15; }
+    .brand img { width: 30px; height: 30px; border-radius: 8px; }
+    .brand small { display: block; font-size: 10px; color: var(--dim); font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 3px; }
+    .nav-links { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+    .nav-links > a:not(.btn) { color: var(--dim); text-decoration: none; font-size: 14px; padding: 8px 11px; border-radius: 8px; }
+    .nav-links > a:not(.btn):hover { color: var(--text); background: var(--card); }
+
+    /* ---- buttons ---- */
     .btn {
-      display: inline-block; padding: 13px 26px; border-radius: 9px; text-decoration: none; font-weight: 600; font-size: 16px;
-      background: var(--accent); color: #06182f; transition: background .15s;
+      display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 10px;
+      text-decoration: none; font-weight: 600; font-size: 15px; border: 1px solid transparent;
+      transition: transform .15s, filter .15s, border-color .15s, color .15s; white-space: nowrap;
     }
-    .btn:hover { background: var(--accent2); }
-    .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-    .btn.ghost:hover { background: rgba(76,141,246,.1); }
-    .sub-note { color: var(--dim); font-size: 13px; margin-top: 10px; }
-    section { padding: 36px 0; }
-    h2 { font-size: 22px; margin-bottom: 18px; color: var(--accent2); }
-    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-    .feat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
-    .feat b { color: var(--text); }
-    .feat p { color: var(--dim); font-size: 14px; margin-top: 4px; }
-    .feat p.tested { font-size: 12.5px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-    .feat p.tested b { color: var(--dim); }
-    .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
-    .azcard {
-      background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 15px 16px;
-      display: flex; flex-direction: column; gap: 9px; text-decoration: none; color: inherit;
-      transition: border-color .15s, transform .15s;
-    }
-    .azcard:hover { border-color: #ffa41c; transform: translateY(-1px); }
-    .azcard:hover .azbtn { background: #f7ca00; color: #1a1305; }
-    .azrow { display: flex; gap: 11px; align-items: flex-start; }
-    .azimg { width: 64px; height: 64px; flex: none; object-fit: contain; background: #fff; border-radius: 6px; }
-    .azicon {
-      width: 64px; height: 64px; flex: none; border-radius: 6px; background: var(--panel);
-      border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 26px;
-    }
-    .aztitle { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--text); }
-    .azstars { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-    .azstars b { color: var(--text); }
+    .btn.primary { background: linear-gradient(180deg, #5b9bff, #3f7fe8); color: #04162e; box-shadow: 0 10px 28px -10px rgba(76,141,246,.8); }
+    .btn.primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn.donate { background: linear-gradient(180deg, #ffc84f, #ff9f1e); color: #2a1a02; box-shadow: 0 10px 28px -10px rgba(255,176,46,.7); }
+    .btn.donate:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    .btn.ghost { border-color: var(--border); color: var(--text); background: rgba(255,255,255,.02); }
+    .btn.ghost:hover { border-color: var(--accent); color: var(--accent2); }
+    .btn.sm { padding: 8px 14px; font-size: 13.5px; border-radius: 8px; }
+
+    /* ---- hero ---- */
+    .hero { padding: 64px 0 36px; display: grid; grid-template-columns: 1.05fr 1fr; gap: 44px; align-items: center; }
+    .eyebrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .pill { font-size: 11px; letter-spacing: .7px; text-transform: uppercase; font-weight: 600; color: var(--dim); border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,.02); }
+    .pill.warn { color: #ffd28a; border-color: var(--amber-border); background: rgba(255,176,46,.06); }
+    h1 { font-size: clamp(34px, 4.6vw, 54px); line-height: 1.06; font-weight: 800; letter-spacing: -.025em; }
+    h1 span { color: var(--accent2); }
+    .lead { margin-top: 18px; font-size: 17px; color: #b9c8d8; max-width: 560px; }
+    .cta { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .cta-note { margin-top: 14px; font-size: 13.5px; color: var(--dim); }
+    .cta-note b { color: var(--ok); font-weight: 600; }
+    .shot { position: relative; }
+    .shot img { width: 100%; height: auto; display: block; border-radius: var(--r); border: 1px solid var(--border); box-shadow: 0 40px 90px -30px rgba(0,0,0,.95); }
+    .shot::after { content: ""; position: absolute; inset: -30px; z-index: -1; background: radial-gradient(60% 60% at 50% 40%, rgba(76,141,246,.28), transparent 70%); filter: blur(24px); }
+
+    /* ---- sections ---- */
+    section { padding: 56px 0; }
+    .sec-head { max-width: 640px; margin-bottom: 28px; }
+    .sec-head h2 { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+    .sec-head p { margin-top: 8px; color: var(--dim); font-size: 16px; }
+
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .feat { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; }
+    .feat .ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: rgba(76,141,246,.14); font-size: 19px; margin-bottom: 12px; }
+    .feat b { font-size: 15.5px; }
+    .feat p { color: var(--dim); font-size: 14px; margin-top: 5px; }
+    .feat p.tested { font-size: 12.5px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .feat p.tested b { font-size: 12.5px; color: var(--dim); }
+
+    .show { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; padding: 26px 0; }
+    .show.flip .txt { order: 2; }
+    .show h3 { font-size: 22px; font-weight: 700; letter-spacing: -.015em; }
+    .show p { margin-top: 8px; color: var(--dim); font-size: 15px; }
+    .show .shot img { box-shadow: 0 30px 70px -30px rgba(0,0,0,.95); }
+    .show .shot.tray { max-width: 300px; margin: 0 auto; }
+    .show .shot.tray::after { inset: -10px; }
+
+    .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+    .azcard { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: inherit; transition: transform .15s, border-color .15s, box-shadow .15s; }
+    .azcard:hover { border-color: #ffa41c; transform: translateY(-2px); box-shadow: 0 16px 34px -20px rgba(0,0,0,.9); }
+    .azrow { display: flex; gap: 14px; align-items: flex-start; }
+    .azimg { width: 86px; height: 86px; flex: none; object-fit: contain; background: #fff; border-radius: 10px; padding: 6px; }
+    .aztitle { font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+    .azstars { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: 7px; }
     .stars { position: relative; display: inline-block; font-size: 13px; line-height: 1; color: #46525f; letter-spacing: 1px; }
     .stars .fill { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; color: #ffa41c; letter-spacing: 1px; }
     .azstars .count { color: var(--dim); font-size: 11.5px; }
-    .azwhy { font-size: 12.5px; color: var(--dim); line-height: 1.45; flex: 1; }
-    .azbtn {
-      align-self: flex-start; background: transparent; border: 1px solid #ffa41c; color: #ffc066;
-      border-radius: 7px; padding: 7px 14px; font-size: 13px; font-weight: 600; transition: background .15s, color .15s;
+    .azwhy { font-size: 13px; color: var(--dim); line-height: 1.5; flex: 1; }
+    .azbtn { align-self: flex-start; background: #f7ca00; color: #1a1305; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; }
+    .azcard.search .azbtn { background: transparent; border: 1px solid #ffa41c; color: #ffc066; }
+    .azcard:hover .azbtn { filter: brightness(1.05); }
+    .azdisclosure { margin: 16px auto 0; max-width: 760px; font-size: 11.5px; color: var(--dim); line-height: 1.5; text-align: center; }
+
+    .donate-band {
+      position: relative; overflow: hidden; border-radius: 20px; padding: 44px 40px;
+      background: linear-gradient(135deg, #2c1e08 0%, #3a2a10 50%, #1d2733 100%); border: 1px solid var(--amber-border);
+      display: grid; grid-template-columns: 1.35fr 1fr; gap: 30px; align-items: center;
     }
-    .azdisclosure { margin: 14px auto 0; max-width: 720px; font-size: 11.5px; color: var(--dim); line-height: 1.5; text-align: center; }
-    .donate { text-align: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 26px; }
-    footer { padding: 34px 0 44px; color: var(--dim); font-size: 12.5px; text-align: center; border-top: 1px solid var(--border); margin-top: 20px; }
-    footer a { color: var(--accent); }
-    .disclosure { max-width: 720px; margin: 8px auto 0; }
+    .donate-band h2 { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; color: #fff3dc; }
+    .donate-band p { margin-top: 10px; color: #d9c9a8; font-size: 15.5px; }
+    .donate-band .side { text-align: center; }
+    .donate-band .big { font-size: 18px; padding: 17px 32px; border-radius: 12px; }
+    .donate-band .side small { display: block; margin-top: 12px; color: #b8a680; font-size: 12.5px; }
+    .donate-band::before { content: "\2615"; position: absolute; right: -14px; bottom: -40px; font-size: 190px; opacity: .06; transform: rotate(-12deg); pointer-events: none; }
+
+    footer { padding: 36px 0 48px; color: var(--dim); font-size: 12.5px; text-align: center; border-top: 1px solid var(--border); margin-top: 24px; }
+    footer p { max-width: 760px; margin: 0 auto 8px; }
+    footer .links { margin-top: 14px; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; padding-top: 40px; gap: 32px; }
+      .show { grid-template-columns: 1fr; gap: 18px; }
+      .show.flip .txt { order: 0; }
+      .donate-band { grid-template-columns: 1fr; padding: 32px 24px; }
+      .hide-m { display: none; }
+      .brand small { display: none; }
+      .brand { font-size: 14px; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1><span class="unofficial">Unofficial · not affiliated with Google</span>Google Home Volume Sync</h1>
-      <div class="desc">
-        Keep google home speaker and device volumes in sync with the program running on your Windows computer.
-        It looks for changes in volume in devices, and matches the volume on devices you assign in this program.
-        You can also adjust relative volume gain to balance volumes as desired throughout your home.
-      </div>
-      <div class="cta">
-        <a class="btn" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">⬇ Download for Windows</a>
-        <a class="btn ghost" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View on GitHub (open source)</a>
-      </div>
-      <div class="sub-note">Free · runs 100% locally on your network · no cloud account needed · starts with Windows</div>
-    </header>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="icon.png" alt=""><span>Google Home Volume Sync<small>Unofficial &middot; free &middot; open source</small></span></a>
+      <nav class="nav-links">
+        <a href="#features" class="hide-m">Features</a>
+        <a href="#screens" class="hide-m">Screenshots</a>
+        <a href="#hardware" class="hide-m">Hardware</a>
+        <a href="https://github.com/leecyrille/GoogleHomeVolumeSync" class="hide-m">GitHub</a>
+        <a class="btn donate sm" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">&#9749; Donate</a>
+      </nav>
+    </div>
+  </header>
 
-    <section>
-      <h2>What it does</h2>
-      <div class="features">
-        <div class="feat"><b>Finds every Cast device</b><p>Google Home, Nest Mini, Nest Audio, Nest Hub, Chromecasts and cast groups appear automatically.</p></div>
-        <div class="feat"><b>Sync groups</b><p>Group any speakers; change one volume anywhere (app, phone, or the speaker itself) and the rest follow instantly.</p></div>
-        <div class="feat"><b>Sync Gain balancing</b><p>Set a per-device 0–200% gain so quiet corners get boosted and loud rooms stay tame.</p></div>
-        <div class="feat"><b>System tray presets</b><p>Right-click the tray icon and set any group to 5%…100% in two clicks, plus play/pause controls.</p></div>
-        <div class="feat"><b>Scheduler</b><p>Quiet the house at bedtime: weekly day/time rules that set volumes for groups or single devices.</p></div>
-        <div class="feat"><b>More than Google</b><p>Also controls Roku TVs, Yamaha MusicCast receivers, LG webOS TVs and Optoma projectors, in the same sync groups.</p><p class="tested">Roku is tested on real hardware. The Yamaha, LG and Optoma backends are written to spec but <b>untested</b> — reports welcome.</p></div>
+  <main class="wrap" id="top">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">
+          <span class="pill">Windows</span>
+          <span class="pill">100% local</span>
+          <span class="pill">Free &amp; open source</span>
+          <span class="pill warn">Not affiliated with Google</span>
+        </div>
+        <h1>Every speaker in your house, <span>at the same volume.</span></h1>
+        <p class="lead">Turn one Google Home or Nest speaker up and the rest follow. Google Home Volume Sync runs quietly on a Windows PC, watches every Cast device on your network and keeps the groups you choose perfectly matched &mdash; with a per-room gain so the kitchen never drowns out the bedroom.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">&#11015; Download for Windows</a>
+          <a class="btn donate" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">&#9749; Buy me a coffee</a>
+          <a class="btn ghost" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View source</a>
+        </div>
+        <p class="cta-note"><b>Free.</b> No account, no cloud &mdash; it talks to your speakers directly on your LAN. Starts with Windows and lives in the tray.</p>
+      </div>
+      <div class="shot">
+        <img src="screenshots/devices.png" width="1320" height="900" alt="The Devices view: every Google Home and Nest speaker on the network with live volume sliders and a Sync Gain control" fetchpriority="high">
       </div>
     </section>
 
-    <section>
-      <h2>Hardware that pairs well with it</h2>
+    <section id="features">
+      <div class="sec-head">
+        <h2>What it does</h2>
+        <p>One always-on PC, every speaker in step. Nothing leaves your network.</p>
+      </div>
+      <div class="features">
+        <div class="feat"><div class="ico">&#128269;</div><b>Finds every Cast device</b><p>Google Home, Nest Mini, Nest Audio, Nest Hub, Chromecasts and cast groups appear automatically &mdash; new devices just show up.</p></div>
+        <div class="feat"><div class="ico">&#128279;</div><b>Sync groups</b><p>Group any speakers; change one volume anywhere &mdash; in this app, on your phone, or on the speaker itself &mdash; and the rest follow instantly.</p></div>
+        <div class="feat"><div class="ico">&#9878;&#65039;</div><b>Sync Gain balancing</b><p>Set a per-device 0&ndash;200% gain so quiet corners get boosted and loud rooms stay tame, while the group still moves as one.</p></div>
+        <div class="feat"><div class="ico">&#128203;</div><b>System tray presets</b><p>Right-click the tray icon and set any group to 5%&hellip;100% in two clicks, plus play / pause / next / previous.</p></div>
+        <div class="feat"><div class="ico">&#9200;</div><b>Scheduler</b><p>Quiet the house at bedtime: weekly day-and-time rules that set volumes for groups or single devices.</p></div>
+        <div class="feat"><div class="ico">&#128250;</div><b>More than Google</b><p>Also controls Roku TVs, Yamaha MusicCast receivers, LG webOS TVs and Optoma projectors, in the same sync groups.</p><p class="tested">Roku is tested on real hardware. The Yamaha, LG and Optoma backends are written to spec but <b>untested</b> &mdash; reports welcome.</p></div>
+      </div>
+    </section>
+
+    <section id="screens">
+      <div class="sec-head">
+        <h2>See it in action</h2>
+        <p>Straight from the app &mdash; a real house with twenty Cast devices.</p>
+      </div>
+
+      <div class="show">
+        <div class="txt">
+          <h3>Sync groups that actually stay in sync</h3>
+          <p>Tick the speakers you want to move together. When any member changes &mdash; from the app, the Google Home app, or a tap on the speaker &mdash; the others are set to match within a moment. Groups are yours, independent of Google&rsquo;s cast groups, and each one has its own slider and media controls.</p>
+        </div>
+        <div class="shot"><img src="screenshots/groups.png" width="1320" height="900" alt="Sync Groups view with an Everything group and its member checkboxes" loading="lazy"></div>
+      </div>
+
+      <div class="show flip">
+        <div class="txt">
+          <h3>Whole-house volume from the tray</h3>
+          <p>You don&rsquo;t need to open the window. Right-click the tray icon, pick a group, pick a level. 5% steps, plus play, pause, next and previous for whatever is casting.</p>
+        </div>
+        <div class="shot tray"><img src="screenshots/tray.png" width="400" height="770" alt="The tray menu: a group submenu listing 5% to 100% presets and transport controls" loading="lazy"></div>
+      </div>
+
+      <div class="show">
+        <div class="txt">
+          <h3>Schedules for bedtime and mornings</h3>
+          <p>Weekly rules with a time and day checkboxes: drop &ldquo;Everything&rdquo; to 50% at 10 pm on school nights, bring the kitchen back up in the morning. Each rule can target several groups or devices at different levels, and toggles on and off with one checkbox.</p>
+        </div>
+        <div class="shot"><img src="screenshots/schedule.png" width="1320" height="900" alt="Schedule view with a 10 PM weekday rule setting the Everything group to 50%" loading="lazy"></div>
+      </div>
+
+      <div class="show flip">
+        <div class="txt">
+          <h3>Set it and forget it</h3>
+          <p>Start with Windows, minimised to the tray. Optional automatic updates from GitHub releases. Export your devices, names, groups and schedules to a JSON file and import them on another PC.</p>
+        </div>
+        <div class="shot"><img src="screenshots/settings.png" width="1320" height="900" alt="Settings view: start with Windows, automatic updates and config export/import" loading="lazy"></div>
+      </div>
+    </section>
+
+    <section id="hardware">
+      <div class="sec-head">
+        <h2>Hardware that pairs well with it</h2>
+        <p>What runs it, and what it controls. Amazon affiliate links &mdash; they cost you nothing extra and help keep the app free.</p>
+      </div>
       <div class="products">
-        <a class="azcard" href="https://www.amazon.com/dp/B0FC4GVSYQ?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+        <a class="azcard" href="https://www.amazon.com/dp/B0BVFS94J5?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
           <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/81uMte8VLAL._AC_SX300_.jpg" alt="Google Nest Audio three-pack bundle product photo" loading="lazy" width="64" height="64">
-            <span class="aztitle">Google Nest Audio (3-Pack) &mdash; Multi-Room Smart Speaker Bundle</span>
+            <img class="azimg" src="https://m.media-amazon.com/images/I/71qO3Dh31VL._AC_SX300_.jpg" alt="Beelink Mini S12 Pro mini PC" loading="lazy" width="86" height="86">
+            <span>
+              <span class="aztitle">Beelink Mini S12 Pro &mdash; Intel N100, 16&nbsp;GB, 500&nbsp;GB, Windows 11</span>
+              <span class="azstars"><span class="stars"><span class="fill" style="width:90%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.5</b> <span class="count">(269 ratings)</span></span>
+            </span>
           </span>
-          <span class="azstars"><span class="stars"><span class="fill" style="width:90%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.5</b> <span class="count">(214 ratings)</span></span>
-          <span class="azwhy">Three full-size Nest Audio speakers &mdash; enough to cover a living room, kitchen and bedroom in one go, and they pair into stereo sets this app treats as one device. Sold by the Google Store.</span>
+          <span class="azwhy">The classic always-on box: about 6&nbsp;W at idle, fanless-quiet, and it disappears behind a monitor. Runs the sync service around the clock so your speakers stay matched even when your main PC is off.</span>
           <span class="azbtn">View on Amazon</span>
         </a>
-        <a class="azcard" href="https://www.amazon.com/s?k=intel+n100+mini+pc+windows+11&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+        <a class="azcard" href="https://www.amazon.com/dp/B0CGYFYY34?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
           <span class="azrow">
-            <span class="azicon" aria-hidden="true">🖥️</span>
-            <span class="aztitle">Intel N100 Mini PC (Windows 11)</span>
+            <img class="azimg" src="https://m.media-amazon.com/images/I/71TeLBggnwL._AC_SX300_.jpg" alt="Google Nest Mini 2nd generation, charcoal" loading="lazy" width="86" height="86">
+            <span>
+              <span class="aztitle">Google Nest Mini (2nd Gen) &mdash; Charcoal</span>
+              <span class="azstars"><span class="stars"><span class="fill" style="width:86%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.3</b> <span class="count">(2,153 ratings)</span></span>
+            </span>
           </span>
-          <span class="azwhy">A tiny ~6&nbsp;W always-on PC is perfect for running the sync service 24/7 &mdash; silent, cheap, and it disappears behind a monitor or on a shelf. Plenty of near-identical models, so compare on price.</span>
+          <span class="azwhy">The cheapest way to put synced audio in every room. Google has stopped making it, so stock on Amazon comes and goes &mdash; check the buying options and the seller.</span>
+          <span class="azbtn">View on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/dp/B0FY3YXCT1?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <img class="azimg" src="https://m.media-amazon.com/images/I/81uMte8VLAL._AC_SX300_.jpg" alt="Google Nest Audio speaker, chalk" loading="lazy" width="86" height="86">
+            <span>
+              <span class="aztitle">Google Nest Audio &mdash; Chalk</span>
+              <span class="azstars"><span class="stars"><span class="fill" style="width:90%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.5</b> <span class="count">(214 ratings)</span></span>
+            </span>
+          </span>
+          <span class="azwhy">Bigger sound for living spaces. Two pair into a stereo set that this app treats as one device, so a whole room moves with one slider.</span>
+          <span class="azbtn">View on Amazon</span>
+        </a>
+        <a class="azcard" href="https://www.amazon.com/dp/B0CLBN88HN?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <img class="azimg" src="https://m.media-amazon.com/images/I/51tx4G8JuXL._AC_SX300_.jpg" alt="Google Nest Hub 2nd generation smart display" loading="lazy" width="86" height="86">
+            <span>
+              <span class="aztitle">Google Nest Hub (2nd Gen) &mdash; 7&Prime; smart display</span>
+              <span class="azstars"><span class="stars"><span class="fill" style="width:84%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.2</b> <span class="count">(1.1K ratings)</span></span>
+            </span>
+          </span>
+          <span class="azwhy">A screen for the kitchen or bedside &mdash; shows what&rsquo;s playing and joins sync groups like any speaker. Availability on Amazon varies, so it&rsquo;s worth watching the listing.</span>
+          <span class="azbtn">View on Amazon</span>
+        </a>
+        <a class="azcard search" href="https://www.amazon.com/s?k=google+nest+hub+max&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+          <span class="azrow">
+            <img class="azimg" src="https://m.media-amazon.com/images/I/61XnSLxURfL._AC_SX300_.jpg" alt="Google Nest Hub Max smart display" loading="lazy" width="86" height="86">
+            <span>
+              <span class="aztitle">Google Nest Hub Max &mdash; 10&Prime; display with big speakers</span>
+            </span>
+          </span>
+          <span class="azwhy">The big-screen, big-speaker option for the main room. Only imported units are listed on Amazon right now, so check the region and plug type before ordering.</span>
           <span class="azbtn">Browse on Amazon</span>
         </a>
-        <a class="azcard" href="https://www.amazon.com/s?k=google+nest+mini+2nd+generation&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+        <a class="azcard search" href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
           <span class="azrow">
-            <span class="azicon" aria-hidden="true">🔊</span>
-            <span class="aztitle">Google Nest Mini (2nd gen)</span>
+            <img class="azimg" src="https://m.media-amazon.com/images/I/61usl1OiHoL._AC_SX300_.jpg" alt="Chromecast with Google TV, snow" loading="lazy" width="86" height="86">
+            <span>
+              <span class="aztitle">Chromecast with Google TV (4K)</span>
+            </span>
           </span>
-          <span class="azwhy">The cheapest way to put synced audio in every room. Google has wound this one down, so what is left is mostly used and third-party stock &mdash; check the seller before you buy.</span>
-          <span class="azbtn">Browse on Amazon</span>
-        </a>
-        <a class="azcard" href="https://www.amazon.com/s?k=google+nest+hub+2nd+gen&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <span class="azicon" aria-hidden="true">🖼️</span>
-            <span class="aztitle">Google Nest Hub (2nd gen)</span>
-          </span>
-          <span class="azwhy">A screen for the kitchen or bedside &mdash; shows what&rsquo;s playing and joins sync groups like any speaker. Availability comes and goes, so it is worth watching the listings.</span>
-          <span class="azbtn">Browse on Amazon</span>
-        </a>
-        <a class="azcard" href="https://www.amazon.com/s?k=google+nest+hub+max&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <span class="azicon" aria-hidden="true">📺</span>
-            <span class="aztitle">Google Nest Hub Max</span>
-          </span>
-          <span class="azwhy">The big-screen, big-speaker option for the main room. Mostly imported stock on Amazon now &mdash; check the region and plug type before ordering.</span>
-          <span class="azbtn">Browse on Amazon</span>
-        </a>
-        <a class="azcard" href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <span class="azicon" aria-hidden="true">📡</span>
-            <span class="aztitle">Chromecast with Google TV (4K)</span>
-          </span>
-          <span class="azwhy">Brings your TV into the same volume groups and schedules. Current listings are mostly resellers rather than the Google Store, so compare prices carefully.</span>
+          <span class="azwhy">Brings your TV into the same volume groups and schedules. Current Amazon listings are mostly resellers rather than the Google Store, so compare prices before you buy.</span>
           <span class="azbtn">Browse on Amazon</span>
         </a>
       </div>
-      <p class="azdisclosure">Affiliate links — we may earn a commission at no extra cost to you. This is an independent site, not associated with Google or any seller. Star rating shown as of September 2026; cards without a rating link to an Amazon search because there is no current first-party listing to point at.</p>
+      <p class="azdisclosure">As an Amazon Associate this site earns from qualifying purchases. Ratings shown as read in September 2026. This is an independent site, not associated with Google or any seller; cards marked &ldquo;Browse&rdquo; open an Amazon search because there is no current first-party listing to point at.</p>
     </section>
 
-    <section>
-      <div class="donate">
-        <h2>Enjoying it?</h2>
-        <p style="color:var(--dim); margin-bottom:16px;">This app is free and open source. If it made your house sound better, you can buy me a coffee.</p>
-        <a class="btn" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">☕ Donate</a>
+    <section id="donate">
+      <div class="donate-band">
+        <div>
+          <h2>Did it make your house sound better?</h2>
+          <p>Google Home Volume Sync is free and open source, built and maintained by one person. If it saved you from shouting &ldquo;Hey Google, volume down&rdquo; in three rooms, a coffee goes a long way toward keeping it that way.</p>
+        </div>
+        <div class="side">
+          <a class="btn donate big" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">&#9749; Buy me a coffee</a>
+          <small>Tip jar on the Pacto Tech store &middot; pick any amount</small>
+        </div>
       </div>
     </section>
+  </main>
 
-    <footer>
+  <footer>
+    <div class="wrap">
       <p>Unofficial Google Home Volume Sync is an independent open-source project. Google, Google Home, Google Nest, Chromecast and related marks are trademarks of Google LLC. This project is not affiliated with, endorsed by, or sponsored by Google.</p>
-      <p class="disclosure">As an Amazon Associate this site earns from qualifying purchases made through the product links above.</p>
-      <p style="margin-top:10px;"><a href="https://github.com/leecyrille/GoogleHomeVolumeSync">Source code &amp; issue tracker on GitHub</a></p>
-    </footer>
-  </div>
+      <p>As an Amazon Associate this site earns from qualifying purchases made through the product links above.</p>
+      <div class="links">
+        <a href="https://github.com/leecyrille/GoogleHomeVolumeSync">Source code &amp; issues on GitHub</a>
+        <a href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases">Releases</a>
+        <a href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">Donate</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

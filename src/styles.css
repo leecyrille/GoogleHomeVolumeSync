@@ -162,3 +162,18 @@ label.chk { display: inline-flex; align-items: center; gap: 5px; cursor: pointer
   background: var(--text-dim); opacity: 0.7;
 }
 .media-info .via { color: var(--accent); font-style: normal; font-size: 11px; }
+
+/* ---- sidebar footer: support links ---- */
+.nav-donate {
+  margin-top: 6px; background: #3a2a10; color: #ffc766; border: 1px solid #7a5a1c;
+  border-radius: 7px; padding: 8px 10px; cursor: pointer; font-size: 13px; font-weight: 600; text-align: left;
+}
+.nav-donate:hover { background: #4d3814; border-color: #ffc766; }
+.nav-site {
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 10.5px; text-align: left; padding: 6px 10px 0; letter-spacing: 0.2px;
+}
+.nav-site:hover { color: var(--accent); text-decoration: underline; }
+.support-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button.btn.donate { background: #3a2a10; color: #ffc766; border-color: #7a5a1c; font-weight: 600; }
+button.btn.donate:hover { background: #4d3814; border-color: #ffc766; color: #ffd98a; }
