@@ -1,6 +1,6 @@
 [package]
 name = "google-home-volume-sync"
-version = "0.1.0"
+version = "0.1.1"
 description = "Unofficial Google Home Volume Sync - control and sync volume of Google Cast and other network AV devices"
 authors = ["Lee Maskell"]
 edition = "2021"
