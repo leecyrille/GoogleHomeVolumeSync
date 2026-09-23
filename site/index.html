@@ -15,563 +15,431 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #070a0f;
-      --bg2: #0c111a;
-      --panel: #121926;
-      --card: #161f2e;
-      --card2: #1d283a;
-      --border: #26344a;
-      --border2: #33465f;
-      --text: #e9f1fa;
-      --dim: #8da2b8;
-      --dimmer: #64788e;
-      --accent: #4c8df6;
-      --accent2: #82b4ff;
-      --accent3: #a5c9ff;
-      --ok: #45d488;
-      --amber: #ffb02e;
-      --amber2: #ffc966;
-      --amber-border: #6d4f18;
-      --r: 16px;
-      --rl: 22px;
+      --paper: #f7f7f4;
+      --paper-2: #efefea;
+      --white: #ffffff;
+      --ink: #111315;
+      --ink-2: #454a52;
+      --ink-3: #7b8089;
+      --rule: #dfdfd8;
+      --rule-2: #cfcfc7;
+      --accent: #2c6bd9;
+      --amber: #f3c14b;
+      --sans: Geist, "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: "Geist Mono", ui-monospace, Consolas, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased;
-      font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
-      overflow-x: hidden;
-    }
-    /* ambient background */
-    body::before {
-      content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
-      background:
-        radial-gradient(1100px 620px at 78% -12%, rgba(76,141,246,.26), transparent 62%),
-        radial-gradient(760px 520px at -8% 38%, rgba(76,141,246,.10), transparent 60%),
-        radial-gradient(900px 600px at 50% 112%, rgba(255,176,46,.07), transparent 60%);
-    }
-    /* faint grid */
-    body::after {
-      content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
-      background-image:
-        linear-gradient(rgba(76,141,246,.045) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(76,141,246,.045) 1px, transparent 1px);
-      background-size: 62px 62px;
-      mask-image: radial-gradient(1000px 700px at 60% 0%, #000 0%, transparent 72%);
-      -webkit-mask-image: radial-gradient(1000px 700px at 60% 0%, #000 0%, transparent 72%);
-    }
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 22px; }
-    a { color: var(--accent2); }
-    img { max-width: 100%; }
-    ::selection { background: rgba(76,141,246,.35); }
+    body { background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.55; -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    img { max-width: 100%; height: auto; display: block; }
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+    .mono { font-family: var(--mono); }
 
-    /* ---------- nav ---------- */
-    .nav {
-      position: sticky; top: 0; z-index: 40;
-      backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
-      background: rgba(7,10,15,.72); border-bottom: 1px solid rgba(38,52,74,.8);
-    }
-    .nav .wrap { display: flex; align-items: center; gap: 18px; height: 66px; }
-    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; text-decoration: none; color: var(--text); font-size: 15px; line-height: 1.15; }
-    .brand img { width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 6px 18px -8px rgba(76,141,246,.9); }
-    .brand small { display: block; font-size: 10px; color: var(--dimmer); font-weight: 600; letter-spacing: 1.3px; text-transform: uppercase; margin-top: 3px; }
-    .nav-links { margin-left: auto; display: flex; gap: 3px; align-items: center; }
-    .nav-links > a:not(.btn) { color: var(--dim); text-decoration: none; font-size: 14px; padding: 8px 12px; border-radius: 9px; transition: color .15s, background .15s; }
-    .nav-links > a:not(.btn):hover { color: var(--text); background: rgba(255,255,255,.05); }
-    #progress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent3)); transition: width .1s linear; }
+    /* ---------- header ---------- */
+    .top { border-bottom: 1px solid var(--rule); background: var(--paper); position: sticky; top: 0; z-index: 20; }
+    .top .wrap { display: flex; align-items: center; height: 64px; gap: 28px; }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
+    .brand img { width: 26px; height: 26px; border-radius: 6px; }
+    .brand .tag { font-family: var(--mono); font-size: 10.5px; font-weight: 400; color: var(--ink-3); border: 1px solid var(--rule-2); border-radius: 4px; padding: 1px 6px; margin-left: 2px; }
+    .top nav { margin-left: auto; display: flex; align-items: center; gap: 26px; font-size: 14px; }
+    .top nav a { text-decoration: none; color: var(--ink-2); }
+    .top nav a:hover { color: var(--ink); }
 
-    /* ---------- buttons ---------- */
     .btn {
-      display: inline-flex; align-items: center; gap: 9px; padding: 14px 24px; border-radius: 11px;
-      text-decoration: none; font-weight: 650; font-size: 15px; border: 1px solid transparent;
-      transition: transform .16s cubic-bezier(.2,.8,.3,1), filter .16s, border-color .16s, color .16s, box-shadow .16s;
-      white-space: nowrap; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 8px;
+      font-size: 15px; font-weight: 500; text-decoration: none; white-space: nowrap; border: 1px solid transparent;
+      transition: background .15s, border-color .15s, color .15s;
     }
-    .btn.primary { background: linear-gradient(180deg, #6ba4ff, #3b7ae6); color: #041529; box-shadow: 0 14px 34px -12px rgba(76,141,246,.95), inset 0 1px 0 rgba(255,255,255,.35); }
-    .btn.primary:hover { filter: brightness(1.07); transform: translateY(-2px); box-shadow: 0 20px 42px -14px rgba(76,141,246,1); }
-    .btn.donate { background: linear-gradient(180deg, #ffcf63, #ff9f1e); color: #2a1a02; box-shadow: 0 14px 34px -14px rgba(255,176,46,.85), inset 0 1px 0 rgba(255,255,255,.4); }
-    .btn.donate:hover { filter: brightness(1.05); transform: translateY(-2px); }
-    .btn.ghost { border-color: var(--border2); color: var(--text); background: rgba(255,255,255,.03); }
-    .btn.ghost:hover { border-color: var(--accent); color: var(--accent2); background: rgba(76,141,246,.08); }
-    .btn.sm { padding: 9px 15px; font-size: 13.5px; border-radius: 9px; }
+    .btn-ink { background: var(--ink); color: #fff; }
+    .btn-ink:hover { background: #2a2e33; }
+    .btn-line { border-color: var(--rule-2); color: var(--ink); background: transparent; }
+    .btn-line:hover { border-color: var(--ink); }
+    .btn-amber { background: var(--amber); color: var(--ink); }
+    .btn-amber:hover { background: #e9b43a; }
+    .btn-sm { height: 36px; padding: 0 14px; font-size: 14px; }
+    .top nav .btn-ink { color: #fff; }
 
     /* ---------- hero ---------- */
-    .hero { padding: 72px 0 26px; display: grid; grid-template-columns: 1.02fr 1fr; gap: 52px; align-items: center; }
-    .eyebrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
-    .pill {
-      font-size: 11px; letter-spacing: .8px; text-transform: uppercase; font-weight: 650; color: var(--dim);
-      border: 1px solid var(--border); padding: 5px 11px; border-radius: 99px; background: rgba(255,255,255,.025);
-    }
-    .pill.live { color: var(--ok); border-color: rgba(69,212,136,.35); background: rgba(69,212,136,.07); display: inline-flex; align-items: center; gap: 6px; }
-    .pill.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(69,212,136,.6); animation: ping 2s infinite; }
-    @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(69,212,136,.55); } 70% { box-shadow: 0 0 0 7px rgba(69,212,136,0); } 100% { box-shadow: 0 0 0 0 rgba(69,212,136,0); } }
-    .pill.warn { color: #ffd28a; border-color: var(--amber-border); background: rgba(255,176,46,.07); }
-    h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.02; font-weight: 850; letter-spacing: -.033em; }
-    h1 .grad {
-      background: linear-gradient(105deg, #8fbcff 0%, #4c8df6 45%, #a5c9ff 100%);
-      -webkit-background-clip: text; background-clip: text; color: transparent;
-    }
-    .lead { margin-top: 20px; font-size: 17.5px; color: #b6c7d9; max-width: 560px; }
-    .cta { margin-top: 30px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    .cta-note { margin-top: 16px; font-size: 13.5px; color: var(--dim); }
-    .cta-note b { color: var(--ok); font-weight: 650; }
+    .hero { padding: 88px 0 56px; }
+    .kicker { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); letter-spacing: .02em; }
+    .hero h1 { margin-top: 22px; font-size: clamp(42px, 6.4vw, 80px); line-height: 1.0; letter-spacing: -.045em; font-weight: 600; max-width: 13ch; }
+    .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: end; }
+    .hero .lead { font-size: 18px; color: var(--ink-2); max-width: 46ch; }
+    .hero .actions { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .hero .meta { margin-top: 16px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
 
-    /* ---------- interactive demo ---------- */
-    .demo-wrap { position: relative; }
-    .demo-wrap::after {
-      content: ""; position: absolute; inset: -34px; z-index: -1;
-      background: radial-gradient(58% 58% at 50% 42%, rgba(76,141,246,.3), transparent 70%); filter: blur(26px);
+    /* ---------- app replica ---------- */
+    .stage { padding: 8px 0 20px; }
+    .win {
+      /* mirrors src/styles.css of the app */
+      --bg: #0f1419; --bg-panel: #171e26; --bg-card: #1d2733; --bg-hover: #243141; --border: #2b3a4b;
+      --text: #dce8f2; --text-dim: #7b8ea0; --accent: #4c8df6; --ok: #3fce7b; --warn: #e2b129; --danger: #e25555;
+      font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px; color: var(--text);
+      background: var(--bg); border-radius: 10px; overflow: hidden;
+      border: 1px solid #0b0e12;
+      box-shadow: 0 1px 2px rgba(17,19,21,.12), 0 24px 60px -20px rgba(17,19,21,.35);
     }
-    .demo {
-      background: linear-gradient(180deg, rgba(29,40,58,.92), rgba(18,25,38,.95));
-      border: 1px solid var(--border2); border-radius: var(--rl); overflow: hidden;
-      box-shadow: 0 44px 96px -34px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.06);
-    }
-    .demo-bar { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: rgba(8,12,19,.5); }
-    .dots { display: flex; gap: 6px; }
-    .dots i { width: 10px; height: 10px; border-radius: 50%; background: #2c3c53; display: block; }
-    .dots i:first-child { background: #ff5f57; } .dots i:nth-child(2) { background: #febc2e; } .dots i:nth-child(3) { background: #28c840; }
-    .demo-bar .ttl { font-size: 12.5px; color: var(--dimmer); font-weight: 600; letter-spacing: .3px; }
-    .demo-bar .grp { margin-left: auto; font-size: 11px; color: var(--accent2); background: rgba(76,141,246,.12); border: 1px solid rgba(76,141,246,.3); padding: 3px 10px; border-radius: 99px; font-weight: 650; }
-    .demo-body { padding: 8px 6px 6px; }
-    .row {
-      display: grid; grid-template-columns: 150px 1fr 46px; gap: 12px; align-items: center;
-      padding: 11px 14px; border-radius: 12px; transition: background .4s;
-    }
-    .row.hit { background: rgba(76,141,246,.11); }
-    .room { min-width: 0; }
-    .room b { display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .room span { font-size: 10.5px; color: var(--dimmer); letter-spacing: .2px; }
-    .room span.boost { color: var(--amber2); }
-    .room span.cut { color: var(--accent2); }
-    .sl { position: relative; display: flex; align-items: center; }
-    input[type=range] {
-      -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 99px;
-      background-image: linear-gradient(90deg, #5b9bff, #82b4ff);
-      background-size: var(--p, 30%) 100%; background-repeat: no-repeat; background-color: #27344a;
-      cursor: grab; outline: none;
-    }
-    input[type=range]:active { cursor: grabbing; }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%;
-      background: #dfeaff; border: 3px solid #3b7ae6; box-shadow: 0 2px 8px rgba(0,0,0,.6);
-      transition: transform .12s;
-    }
-    input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.14); }
-    input[type=range]::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: #dfeaff; border: 3px solid #3b7ae6; }
-    .pct { font-size: 13px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-    .demo-foot {
-      display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border);
-      background: rgba(8,12,19,.45); font-size: 12.5px; color: var(--dim);
-    }
-    .demo-foot .hand { font-size: 15px; animation: nudge 2.4s ease-in-out infinite; }
-    @keyframes nudge { 0%,100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
-    .demo-foot b { color: var(--text); font-weight: 600; }
+    .titlebar { height: 34px; display: flex; align-items: center; background: #1b1f24; border-bottom: 1px solid #0b0e12; user-select: none; }
+    .titlebar img { width: 16px; height: 16px; margin: 0 9px 0 12px; border-radius: 3px; }
+    .titlebar .t { font-size: 12px; color: #e6e6e6; }
+    .titlebar .ctl { margin-left: auto; display: flex; height: 100%; }
+    .titlebar .ctl span { width: 46px; display: grid; place-items: center; color: #d0d0d0; font-size: 12px; }
+    .titlebar .ctl span:last-child:hover { background: #c42b1c; color: #fff; }
+    .app { display: flex; height: 452px; }
+    .side { width: 168px; flex: none; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 10px; gap: 4px; }
+    .side .nt { font-size: 16px; font-weight: 700; color: var(--accent); padding: 4px 10px 14px; letter-spacing: .5px; line-height: 1.25; }
+    .side .nt span { display: block; font-size: 10px; color: var(--text-dim); font-weight: 400; letter-spacing: .3px; margin-top: 2px; }
+    .side .nb { color: var(--text-dim); padding: 9px 12px; border-radius: 7px; font-size: 14px; }
+    .side .nb.on { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+    .side .sp { flex: 1; }
+    .side .dn { background: #3a2a10; color: #ffc766; border: 1px solid #7a5a1c; border-radius: 7px; padding: 8px 10px; font-size: 13px; font-weight: 600; }
+    .side .st { font-size: 10.5px; color: var(--text-dim); padding: 6px 10px 0; }
+    .main { flex: 1; overflow: hidden; padding: 20px 24px; min-width: 0; }
+    .main h2 { font-size: 18px; margin-bottom: 14px; font-weight: 600; letter-spacing: 0; }
+    .main h2 .sub { font-size: 12px; color: var(--text-dim); font-weight: 400; margin-left: 10px; }
+    .tb { display: flex; gap: 8px; margin-bottom: 4px; }
+    .b { background: var(--bg-hover); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 6px 12px; font-size: 13px; font-family: inherit; }
+    .sec { font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .8px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+    .sec span { font-size: 11px; color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 7px 12px; margin-bottom: 7px; display: flex; align-items: center; gap: 10px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+    .id { width: 200px; flex: none; overflow: hidden; }
+    .id b { display: block; font-size: 13.5px; font-weight: 600; border-bottom: 1px dashed var(--border); padding-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .id i { display: block; font-style: normal; font-size: 11px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; }
+    .mute { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; font-size: 14px; line-height: 1; color: var(--text); cursor: pointer; font-family: inherit; }
+    .mute.on { color: var(--danger); border-color: var(--danger); }
+    .win input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 60px; height: 5px; border-radius: 3px; background: var(--border); cursor: pointer; margin: 0; }
+    .win input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #0d3a52; }
+    .win input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid #0d3a52; }
+    .win input[type=range]:focus { outline: none; }
+    .pct { width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+    .gw { display: flex; align-items: center; gap: 4px; flex: none; font-size: 10.5px; color: var(--text-dim); }
+    .gc { display: flex; flex-direction: column; gap: 2px; }
+    .gc input { width: 52px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 5px; font-size: 12px; text-align: right; font-family: inherit; }
+    .gc input:focus { outline: none; border-color: var(--accent); }
+    .gbar { position: relative; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+    .gfill { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+    .gfill.hot { background: var(--warn); }
+    .gmid { position: absolute; left: 50%; top: -1px; width: 1px; height: 6px; background: var(--text-dim); opacity: .7; }
 
-    /* ---------- stats ---------- */
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 34px 0 6px; }
-    .stat { background: rgba(22,31,46,.6); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 20px; }
-    .stat b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.02em; background: linear-gradient(180deg, #cfe2ff, #7fb0ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .stat span { font-size: 12.5px; color: var(--dim); }
+    .under { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin-top: 16px; font-size: 13.5px; color: var(--ink-3); }
+    .under .log { font-family: var(--mono); font-size: 12px; color: var(--ink-2); min-height: 1.5em; white-space: nowrap; }
+    .under .log em { font-style: normal; color: var(--accent); }
 
     /* ---------- sections ---------- */
-    section { padding: 66px 0; }
-    .sec-head { max-width: 660px; margin-bottom: 32px; }
-    .kicker { font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
-    .sec-head h2 { font-size: clamp(26px, 3.2vw, 34px); font-weight: 820; letter-spacing: -.025em; line-height: 1.12; }
-    .sec-head p { margin-top: 10px; color: var(--dim); font-size: 16.5px; }
+    section { padding: 96px 0 0; }
+    .sh { display: grid; grid-template-columns: 220px 1fr; gap: 40px; border-top: 1px solid var(--ink); padding-top: 18px; margin-bottom: 44px; }
+    .sh .n { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+    .sh h2 { font-size: clamp(28px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.035em; font-weight: 600; max-width: 22ch; }
+    .sh p { margin-top: 12px; color: var(--ink-2); font-size: 16.5px; max-width: 56ch; }
+    .indent { margin-left: 260px; }
 
-    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
-    .feat {
-      position: relative; background: linear-gradient(180deg, rgba(29,40,58,.72), rgba(18,25,38,.72));
-      border: 1px solid var(--border); border-radius: var(--r); padding: 22px;
-      transition: transform .18s, border-color .18s, box-shadow .18s;
-    }
-    .feat:hover { transform: translateY(-3px); border-color: var(--border2); box-shadow: 0 22px 46px -26px rgba(0,0,0,.95); }
-    .feat .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(76,141,246,.14); border: 1px solid rgba(76,141,246,.22); font-size: 19px; margin-bottom: 14px; }
-    .feat b { font-size: 16px; }
-    .feat p { color: var(--dim); font-size: 14px; margin-top: 6px; }
-    .feat p.tested { font-size: 12.5px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .feat p.tested b { font-size: 12.5px; color: var(--dim); }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+    .steps div { border-top: 1px solid var(--rule-2); padding-top: 16px; }
+    .steps .mono { font-size: 12px; color: var(--ink-3); }
+    .steps h3 { margin-top: 10px; font-size: 18px; font-weight: 600; letter-spacing: -.015em; }
+    .steps p { margin-top: 6px; color: var(--ink-2); font-size: 15px; }
 
-    /* ---------- how it works ---------- */
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: s; }
-    .step { position: relative; padding: 24px 22px 22px; background: rgba(18,25,38,.6); border: 1px solid var(--border); border-radius: var(--r); }
-    .step::before {
-      counter-increment: s; content: counter(s);
-      position: absolute; top: -14px; left: 22px; width: 32px; height: 32px; border-radius: 10px;
-      display: grid; place-items: center; font-size: 14px; font-weight: 800; color: #041529;
-      background: linear-gradient(180deg, #6ba4ff, #3b7ae6); box-shadow: 0 8px 20px -8px rgba(76,141,246,.9);
-    }
-    .step h4 { margin-top: 12px; font-size: 16.5px; font-weight: 700; }
-    .step p { margin-top: 7px; color: var(--dim); font-size: 14px; }
+    .feats { display: grid; grid-template-columns: 1fr 1fr; column-gap: 48px; }
+    .feat { display: grid; grid-template-columns: 200px 1fr; gap: 20px; padding: 20px 0; border-top: 1px solid var(--rule); }
+    .feat h3 { font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
+    .feat p { color: var(--ink-2); font-size: 15px; }
+    .feat small { display: block; margin-top: 8px; font-size: 13px; color: var(--ink-3); }
 
-    /* ---------- screenshots ---------- */
-    .show { display: grid; grid-template-columns: 1fr 1fr; gap: 46px; align-items: center; padding: 30px 0; }
-    .show.flip .txt { order: 2; }
-    .show h3 { font-size: 23px; font-weight: 760; letter-spacing: -.02em; }
-    .show p { margin-top: 10px; color: var(--dim); font-size: 15.2px; }
-    .show ul { margin-top: 14px; list-style: none; display: grid; gap: 8px; }
-    .show li { font-size: 14px; color: var(--dim); padding-left: 24px; position: relative; }
-    .show li::before { content: "\2713"; position: absolute; left: 0; top: 0; color: var(--ok); font-weight: 700; }
-    .frame {
-      border-radius: var(--r); overflow: hidden; border: 1px solid var(--border2);
-      background: var(--panel); box-shadow: 0 36px 80px -36px rgba(0,0,0,.98);
-    }
-    .frame .fbar { display: flex; align-items: center; gap: 8px; padding: 9px 13px; background: rgba(8,12,19,.7); border-bottom: 1px solid var(--border); }
-    .frame .fbar span { font-size: 11.5px; color: var(--dimmer); font-weight: 600; }
-    .frame img { display: block; width: 100%; height: auto; }
-    .frame.tray { max-width: 310px; margin: 0 auto; }
+    .shot { display: grid; grid-template-columns: 1fr 1.55fr; gap: 56px; align-items: start; padding: 36px 0; border-top: 1px solid var(--rule); }
+    .sh + .shot { border-top: 0; padding-top: 0; }
+    .shot h3 { font-size: 21px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+    .shot p { margin-top: 10px; color: var(--ink-2); font-size: 15.5px; }
+    .shot figure img { border-radius: 8px; border: 1px solid #0b0e12; box-shadow: 0 1px 2px rgba(17,19,21,.1), 0 16px 40px -18px rgba(17,19,21,.3); }
+    .shot figure.narrow img { max-width: 300px; }
 
-    /* ---------- products ---------- */
-    .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 16px; }
-    .azcard {
-      background: linear-gradient(180deg, rgba(29,40,58,.7), rgba(18,25,38,.7)); border: 1px solid var(--border);
-      border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; gap: 11px;
-      text-decoration: none; color: inherit; transition: transform .18s, border-color .18s, box-shadow .18s;
-    }
-    .azcard:hover { border-color: #ffa41c; transform: translateY(-3px); box-shadow: 0 22px 44px -24px rgba(0,0,0,.95); }
-    .azrow { display: flex; gap: 15px; align-items: flex-start; }
-    .azimg { width: 88px; height: 88px; flex: none; object-fit: contain; background: #fff; border-radius: 11px; padding: 7px; }
-    .aztitle { font-size: 14.5px; font-weight: 650; line-height: 1.35; }
-    .azstars { display: flex; align-items: center; gap: 7px; font-size: 12.5px; margin-top: 8px; }
-    .stars { position: relative; display: inline-block; font-size: 13px; line-height: 1; color: #3b4a5e; letter-spacing: 1px; }
-    .stars .fill { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; color: #ffa41c; letter-spacing: 1px; }
-    .azstars .count { color: var(--dimmer); font-size: 11.5px; }
-    .azwhy { font-size: 13px; color: var(--dim); line-height: 1.5; flex: 1; }
-    .azbtn { align-self: flex-start; background: #f7ca00; color: #1a1305; border-radius: 9px; padding: 9px 15px; font-size: 13px; font-weight: 700; }
-    .azcard.search .azbtn { background: transparent; border: 1px solid #ffa41c; color: #ffc066; }
-    .azcard:hover .azbtn { filter: brightness(1.05); }
-    .azdisclosure { margin: 18px auto 0; max-width: 780px; font-size: 11.5px; color: var(--dimmer); line-height: 1.55; text-align: center; }
+    .prods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+    .prod { display: flex; flex-direction: column; gap: 12px; padding: 22px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); text-decoration: none; color: inherit; background: var(--paper); transition: background .15s; }
+    .prod:hover { background: var(--white); }
+    .prod .img { height: 150px; background: var(--white); border-radius: 6px; display: grid; place-items: center; padding: 14px; }
+    .prod .img img { max-height: 122px; width: auto; }
+    .prod h3 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.35; }
+    .prod .rate { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+    .prod .rate b { color: #b7791f; font-weight: 500; }
+    .prod p { font-size: 14px; color: var(--ink-2); flex: 1; }
+    .prod .go { font-size: 14px; font-weight: 500; }
+    .prod:hover .go { text-decoration: underline; }
+    .fine { margin-top: 16px; font-size: 12.5px; color: var(--ink-3); max-width: 80ch; }
 
-    /* ---------- faq ---------- */
-    .faq { display: grid; gap: 10px; }
-    details {
-      background: rgba(18,25,38,.6); border: 1px solid var(--border); border-radius: 13px; padding: 0 18px;
-      transition: border-color .18s, background .18s;
-    }
-    details[open] { border-color: var(--border2); background: rgba(29,40,58,.6); }
-    summary {
-      list-style: none; cursor: pointer; padding: 16px 30px 16px 0; font-weight: 620; font-size: 15.5px;
-      position: relative; user-select: none;
-    }
-    summary::-webkit-details-marker { display: none; }
-    summary::after {
-      content: "+"; position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
-      font-size: 20px; color: var(--accent2); font-weight: 400; transition: transform .2s;
-    }
-    details[open] summary::after { content: "\2212"; }
-    details p { padding: 0 0 18px; color: var(--dim); font-size: 14.5px; margin-top: -4px; }
+    .faq { border-bottom: 1px solid var(--rule); }
+    .faq details { border-top: 1px solid var(--rule); }
+    .faq summary { list-style: none; cursor: pointer; padding: 20px 40px 20px 0; font-size: 17px; font-weight: 500; letter-spacing: -.01em; position: relative; }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary::after { content: "+"; position: absolute; right: 4px; top: 17px; font-family: var(--mono); font-size: 20px; color: var(--ink-3); font-weight: 400; }
+    .faq details[open] summary::after { content: "\2013"; }
+    .faq details p { padding: 0 0 22px; color: var(--ink-2); font-size: 15.5px; max-width: 70ch; }
 
-    /* ---------- donate ---------- */
-    .donate-band {
-      position: relative; overflow: hidden; border-radius: var(--rl); padding: 46px 42px;
-      background: linear-gradient(135deg, #2e2009 0%, #3d2c11 48%, #1a2433 100%);
-      border: 1px solid var(--amber-border);
-      display: grid; grid-template-columns: 1.35fr 1fr; gap: 32px; align-items: center;
+    .support { margin-top: 96px; background: var(--ink); color: #f3f3ef; border-radius: 12px; padding: 48px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 40px; align-items: center; }
+    .support h2 { font-size: clamp(26px, 3vw, 36px); line-height: 1.1; letter-spacing: -.03em; font-weight: 600; }
+    .support p { margin-top: 12px; color: #b9bcc2; font-size: 16px; max-width: 54ch; }
+    .support .r { text-align: right; }
+    .support .r small { display: block; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: #8a8e95; }
+
+    .end { padding: 112px 0 96px; text-align: center; }
+    .end h2 { font-size: clamp(32px, 4.4vw, 56px); letter-spacing: -.04em; font-weight: 600; line-height: 1.04; }
+    .end p { margin: 14px auto 0; color: var(--ink-2); font-size: 17px; max-width: 48ch; }
+    .end .actions { margin-top: 28px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+    footer { border-top: 1px solid var(--rule); padding: 36px 0 48px; font-size: 13px; color: var(--ink-3); }
+    footer .wrap { display: grid; grid-template-columns: 1fr auto; gap: 32px; }
+    footer p { max-width: 72ch; }
+    footer p + p { margin-top: 8px; }
+    footer .links { display: flex; gap: 22px; align-items: flex-start; }
+    footer .links a { text-decoration: none; color: var(--ink-2); }
+    footer .links a:hover { color: var(--ink); }
+
+    @media (max-width: 1000px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 28px; }
+      .sh { grid-template-columns: 1fr; gap: 10px; }
+      .indent { margin-left: 0; }
+      .feats { grid-template-columns: 1fr; }
+      .shot { grid-template-columns: 1fr; gap: 24px; }
+      .prods { grid-template-columns: 1fr 1fr; }
+      .support { grid-template-columns: 1fr; padding: 36px 28px; }
+      .support .r { text-align: left; }
+      .side { display: none; }
+      .top nav .hide-m { display: none; }
+      footer .wrap { grid-template-columns: 1fr; }
     }
-    .donate-band h2 { font-size: clamp(25px, 3vw, 32px); font-weight: 820; letter-spacing: -.025em; line-height: 1.14; color: #fff3dc; }
-    .donate-band p { margin-top: 12px; color: #dcccab; font-size: 15.5px; }
-    .donate-band .side { text-align: center; }
-    .donate-band .big { font-size: 18px; padding: 18px 34px; border-radius: 13px; }
-    .donate-band .side small { display: block; margin-top: 13px; color: #bba884; font-size: 12.5px; }
-    .donate-band::before { content: "\2615"; position: absolute; right: -16px; bottom: -44px; font-size: 200px; opacity: .06; transform: rotate(-12deg); pointer-events: none; }
-
-    /* final cta */
-    .final { text-align: center; padding: 30px 0 10px; }
-    .final h2 { font-size: clamp(27px, 3.4vw, 38px); font-weight: 840; letter-spacing: -.03em; }
-    .final p { margin: 12px auto 0; color: var(--dim); max-width: 540px; font-size: 16px; }
-    .final .cta { justify-content: center; }
-
-    footer { padding: 42px 0 52px; color: var(--dimmer); font-size: 12.5px; text-align: center; border-top: 1px solid var(--border); margin-top: 26px; }
-    footer p { max-width: 780px; margin: 0 auto 9px; }
-    footer .links { margin-top: 16px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
-
-    /* ---------- reveal ---------- */
-    .rv { opacity: 0; transform: translateY(18px); transition: opacity .6s cubic-bezier(.2,.8,.3,1), transform .6s cubic-bezier(.2,.8,.3,1); }
-    .rv.in { opacity: 1; transform: none; }
-    @media (prefers-reduced-motion: reduce) {
-      .rv { opacity: 1; transform: none; transition: none; }
-      html { scroll-behavior: auto; }
-      .demo-foot .hand, .pill.live::before { animation: none; }
-    }
-
-    @media (max-width: 960px) {
-      .hero { grid-template-columns: 1fr; padding-top: 44px; gap: 36px; }
-      .show { grid-template-columns: 1fr; gap: 22px; }
-      .show.flip .txt { order: 0; }
-      .steps { grid-template-columns: 1fr; gap: 22px; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .donate-band { grid-template-columns: 1fr; padding: 34px 26px; }
-      .hide-m { display: none; }
-      .brand small { display: none; }
-      .brand { font-size: 14px; }
-    }
-    @media (max-width: 520px) {
-      .row { grid-template-columns: 116px 1fr 42px; gap: 9px; padding: 10px; }
-      .btn { padding: 13px 18px; font-size: 14.5px; }
+    @media (max-width: 640px) {
+      .wrap { padding: 0 18px; }
+      .hero { padding-top: 56px; }
+      .steps, .prods { grid-template-columns: 1fr; }
+      .feat { grid-template-columns: 1fr; gap: 6px; }
+      .tb, .gw > span { display: none; }
+      .id { width: 104px; }
+      .id i { display: none; }
+      .main { padding: 14px; }
+      .app { height: auto; }
+      .under { flex-direction: column; gap: 8px; }
+      .under .log { white-space: normal; }
+      .brand .tag { display: none; }
     }
   </style>
 </head>
 <body>
-  <header class="nav">
+  <header class="top">
     <div class="wrap">
-      <a class="brand" href="#top"><img src="icon.png" alt=""><span>Google Home Volume Sync<small>Unofficial &middot; free &middot; open source</small></span></a>
-      <nav class="nav-links">
-        <a href="#features" class="hide-m">Features</a>
-        <a href="#screens" class="hide-m">Screenshots</a>
-        <a href="#faq" class="hide-m">FAQ</a>
-        <a href="https://github.com/leecyrille/GoogleHomeVolumeSync" class="hide-m">GitHub</a>
-        <a class="btn donate sm" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">&#9749; Donate</a>
+      <a class="brand" href="#"><img src="icon.png" alt="">Google Home Volume Sync<span class="tag">unofficial</span></a>
+      <nav>
+        <a class="hide-m" href="#how">How it works</a>
+        <a class="hide-m" href="#features">Features</a>
+        <a class="hide-m" href="#hardware">Hardware</a>
+        <a class="hide-m" href="#faq">FAQ</a>
+        <a class="hide-m" href="https://github.com/leecyrille/GoogleHomeVolumeSync">GitHub</a>
+        <a class="btn btn-ink btn-sm" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">Download</a>
       </nav>
-      <div id="progress"></div>
     </div>
   </header>
 
-  <main class="wrap" id="top">
-    <section class="hero">
-      <div>
-        <div class="eyebrow">
-          <span class="pill live">Live demo below</span>
-          <span class="pill">Windows</span>
-          <span class="pill">100% local</span>
-          <span class="pill warn">Not affiliated with Google</span>
-        </div>
-        <h1>Every speaker in your house, <span class="grad">at the same volume.</span></h1>
-        <p class="lead">Turn one Google Home or Nest speaker up and the rest follow. Volume Sync runs quietly on a Windows PC, watches every Cast device on your network, and keeps the groups you choose perfectly matched &mdash; with a per-room gain so the kitchen never drowns out the bedroom.</p>
-        <div class="cta">
-          <a class="btn primary" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">&#11015; Download for Windows</a>
-          <a class="btn ghost" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View source</a>
-        </div>
-        <p class="cta-note"><b>Free.</b> No account, no cloud &mdash; it talks to your speakers directly on your LAN. Starts with Windows and lives in the tray.</p>
-      </div>
-
-      <div class="demo-wrap">
-        <div class="demo" id="demo">
-          <div class="demo-bar">
-            <span class="dots"><i></i><i></i><i></i></span>
-            <span class="ttl">Volume Sync</span>
-            <span class="grp">Sync group: Everything</span>
-          </div>
-          <div class="demo-body" id="demoBody"></div>
-          <div class="demo-foot">
-            <span class="hand">&#128072;</span>
-            <span><b>Drag any slider.</b> The rest follow &mdash; scaled by each room&rsquo;s Sync Gain.</span>
+  <main>
+    <div class="wrap">
+      <section class="hero">
+        <div class="kicker">Free &nbsp;/&nbsp; Windows 10 &amp; 11 &nbsp;/&nbsp; Open source &nbsp;/&nbsp; Not affiliated with Google</div>
+        <div class="hero-grid">
+          <h1>Every speaker in the house, at the same volume.</h1>
+          <div>
+            <p class="lead">Keep Google Home speaker and device volumes in sync with the program running on your Windows computer. It looks for changes in volume in devices, and matches the volume on devices you assign in this program. You can also adjust relative volume gain to balance volumes as desired throughout your home.</p>
+            <div class="actions">
+              <a class="btn btn-ink" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">Download for Windows</a>
+              <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View source</a>
+            </div>
+            <p class="meta">No account, no cloud. Talks to your speakers directly on your network.</p>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <div class="stats rv">
-      <div class="stat"><b>20</b><span>Cast devices in the test house</span></div>
-      <div class="stat"><b>5%</b><span>Volume steps from the tray menu</span></div>
-      <div class="stat"><b>0</b><span>Cloud services or accounts</span></div>
-      <div class="stat"><b>&lt;1s</b><span>From one change to all matched</span></div>
-    </div>
-
-    <section id="features">
-      <div class="sec-head rv">
-        <div class="kicker">Features</div>
-        <h2>One always-on PC, every speaker in step</h2>
-        <p>Nothing leaves your network. No Google account, no subscription, no hub to buy.</p>
-      </div>
-      <div class="features">
-        <div class="feat rv"><div class="ico">&#128269;</div><b>Finds every Cast device</b><p>Google Home, Nest Mini, Nest Audio, Nest Hub, Chromecasts and cast groups appear automatically &mdash; new devices just show up.</p></div>
-        <div class="feat rv"><div class="ico">&#128279;</div><b>Sync groups</b><p>Group any speakers; change one volume anywhere &mdash; in this app, on your phone, or on the speaker itself &mdash; and the rest follow instantly.</p></div>
-        <div class="feat rv"><div class="ico">&#9878;&#65039;</div><b>Sync Gain balancing</b><p>Set a per-device 0&ndash;200% gain so quiet corners get boosted and loud rooms stay tame, while the group still moves as one.</p></div>
-        <div class="feat rv"><div class="ico">&#128203;</div><b>System tray presets</b><p>Right-click the tray icon and set any group to 5%&hellip;100% in two clicks, plus play / pause / next / previous.</p></div>
-        <div class="feat rv"><div class="ico">&#9200;</div><b>Scheduler</b><p>Quiet the house at bedtime: weekly day-and-time rules that set volumes for groups or single devices.</p></div>
-        <div class="feat rv"><div class="ico">&#128250;</div><b>More than Google</b><p>Also controls Roku TVs, Yamaha MusicCast receivers, LG webOS TVs and Optoma projectors, in the same sync groups.</p><p class="tested">Roku is tested on real hardware. The Yamaha, LG and Optoma backends are written to spec but <b>untested</b> &mdash; reports welcome.</p></div>
-      </div>
-    </section>
-
-    <section id="how">
-      <div class="sec-head rv">
-        <div class="kicker">Getting started</div>
-        <h2>Three steps, about five minutes</h2>
-      </div>
-      <div class="steps">
-        <div class="step rv"><h4>Install it on a PC that stays on</h4><p>A laptop, a desktop, or a cheap mini PC in a closet. The installer needs no admin rights and ticks &ldquo;start with Windows&rdquo; for you.</p></div>
-        <div class="step rv"><h4>Let it find your speakers</h4><p>It browses your network continuously and lists every Cast device it sees, with live volume for each. Nothing to configure.</p></div>
-        <div class="step rv"><h4>Group them and set gains</h4><p>Tick which speakers move together, nudge each room&rsquo;s gain until the house sounds even, and close the window to the tray.</p></div>
-      </div>
-    </section>
-
-    <section id="screens">
-      <div class="sec-head rv">
-        <div class="kicker">Screenshots</div>
-        <h2>See it in action</h2>
-        <p>Straight from the app &mdash; a real house with twenty Cast devices.</p>
-      </div>
-
-      <div class="show rv">
-        <div class="txt">
-          <h3>Every speaker, one list</h3>
-          <p>Live sliders for each device, the name you gave it, and a Sync Gain box to balance the room against the rest of the house.</p>
-          <ul>
-            <li>Rename anything &mdash; &ldquo;Nest Mini 4&rdquo; becomes &ldquo;Kitchen&rdquo;</li>
-            <li>Cast groups and Roku TVs get their own sections</li>
-            <li>Offline devices show when they were last seen</li>
-          </ul>
+      <div class="stage">
+        <div class="win" aria-label="Interactive replica of the Volume Sync app">
+          <div class="titlebar">
+            <img src="icon.png" alt="">
+            <span class="t">Unofficial Google Home Volume Sync</span>
+            <span class="ctl"><span>&#8212;</span><span>&#9744;</span><span>&#10005;</span></span>
+          </div>
+          <div class="app">
+            <div class="side">
+              <div class="nt">Volume Sync<span>unofficial · for Google Home</span></div>
+              <div class="nb on">Devices</div>
+              <div class="nb">Sync Groups</div>
+              <div class="nb">Schedule</div>
+              <div class="nb">Log</div>
+              <div class="nb">Settings</div>
+              <div class="sp"></div>
+              <div class="dn">&#9749; Buy me a coffee</div>
+              <div class="st">googlehomevolumesync.com</div>
+            </div>
+            <div class="main">
+              <h2>Devices <span class="sub">4 online / 4 known</span></h2>
+              <div class="tb"><button class="b" tabindex="-1">Scan for Roku TVs</button><button class="b" tabindex="-1">Add device by IP&hellip;</button></div>
+              <div class="sec">Devices <span>4 online</span></div>
+              <div id="rows"></div>
+            </div>
+          </div>
         </div>
-        <div class="frame"><div class="fbar"><span class="dots"><i></i><i></i><i></i></span><span>Devices</span></div><img src="screenshots/devices.png" width="1320" height="900" alt="The Devices view: every Google Home and Nest speaker on the network with live volume sliders and a Sync Gain control" fetchpriority="high"></div>
-      </div>
-
-      <div class="show flip rv">
-        <div class="txt">
-          <h3>Sync groups that actually stay in sync</h3>
-          <p>Tick the speakers you want to move together. When any member changes &mdash; from the app, the Google Home app, or a tap on the speaker &mdash; the others are set to match within a moment. Groups are yours, independent of Google&rsquo;s cast groups, and each one has its own slider and media controls.</p>
+        <div class="under">
+          <span>A working replica of the app. Drag a slider or change a Sync Gain.</span>
+          <span class="log" id="log" aria-live="polite"></span>
         </div>
-        <div class="frame"><div class="fbar"><span class="dots"><i></i><i></i><i></i></span><span>Sync Groups</span></div><img src="screenshots/groups.png" width="1320" height="900" alt="Sync Groups view with an Everything group and its member checkboxes" loading="lazy"></div>
       </div>
 
-      <div class="show rv">
-        <div class="txt">
-          <h3>Whole-house volume from the tray</h3>
-          <p>You don&rsquo;t need to open the window. Right-click the tray icon, pick a group, pick a level. 5% steps, plus play, pause, next and previous for whatever is casting.</p>
+      <section id="how">
+        <div class="sh">
+          <div class="n">01 &nbsp;How it works</div>
+          <div><h2>Three steps, about five minutes.</h2></div>
         </div>
-        <div class="frame tray"><img src="screenshots/tray.png" width="400" height="770" alt="The tray menu: a group submenu listing 5% to 100% presets and transport controls" loading="lazy"></div>
-      </div>
-
-      <div class="show flip rv">
-        <div class="txt">
-          <h3>Schedules for bedtime and mornings</h3>
-          <p>Weekly rules with a time and day checkboxes: drop &ldquo;Everything&rdquo; to 50% at 10 pm on school nights, bring the kitchen back up in the morning. Each rule can target several groups or devices at different levels, and toggles on and off with one checkbox.</p>
+        <div class="steps indent">
+          <div><span class="mono">01</span><h3>Install on a PC that stays on</h3><p>A desktop, a laptop, or a small mini PC in a closet. No admin rights needed, and it starts with Windows by default.</p></div>
+          <div><span class="mono">02</span><h3>It finds your speakers</h3><p>Every Cast device on the network appears on its own, with its live volume. There is nothing to configure.</p></div>
+          <div><span class="mono">03</span><h3>Group them, set the balance</h3><p>Tick the speakers that should move together and nudge each room&rsquo;s Sync Gain until the house sounds even.</p></div>
         </div>
-        <div class="frame"><div class="fbar"><span class="dots"><i></i><i></i><i></i></span><span>Schedule</span></div><img src="screenshots/schedule.png" width="1320" height="900" alt="Schedule view with a 10 PM weekday rule setting the Everything group to 50%" loading="lazy"></div>
-      </div>
+      </section>
 
-      <div class="show rv">
-        <div class="txt">
-          <h3>Set it and forget it</h3>
-          <p>Start with Windows, minimised to the tray. Optional automatic updates from GitHub releases. Export your devices, names, groups and schedules to a JSON file and import them on another PC.</p>
+      <section id="features">
+        <div class="sh">
+          <div class="n">02 &nbsp;Features</div>
+          <div><h2>Small app, does one job properly.</h2><p>Everything runs on your PC and your network. No Google account, subscription or hub.</p></div>
         </div>
-        <div class="frame"><div class="fbar"><span class="dots"><i></i><i></i><i></i></span><span>Settings</span></div><img src="screenshots/settings.png" width="1320" height="900" alt="Settings view: start with Windows, automatic updates and config export/import" loading="lazy"></div>
-      </div>
-    </section>
+        <div class="feats">
+          <div class="feat"><h3>Finds every Cast device</h3><p>Google Home, Nest Mini, Nest Audio, Nest Hub, Chromecasts and cast groups show up automatically.</p></div>
+          <div class="feat"><h3>Sync groups</h3><p>Change one speaker from the app, the Google Home app or the speaker itself, and the rest of its group follows.</p></div>
+          <div class="feat"><h3>Sync Gain</h3><p>A 0&ndash;200% balance per device, so a quiet bathroom and a loud kitchen still move together at the right levels.</p></div>
+          <div class="feat"><h3>Tray presets</h3><p>Right-click the tray icon to set any group from 5% to 100%, or play, pause and skip.</p></div>
+          <div class="feat"><h3>Schedules</h3><p>Weekly rules by day and time: bring the house down at bedtime, back up in the morning.</p></div>
+          <div class="feat"><h3>Rename anything</h3><p>Give devices and groups your own names. Cast groups and TVs are listed in their own sections.</p></div>
+          <div class="feat"><h3>A full log</h3><p>Every discovery, observed change and command, with each device&rsquo;s Cast ID and address.</p></div>
+          <div class="feat"><h3>More than Google</h3><p>Roku TVs, Yamaha MusicCast receivers, LG webOS TVs and Optoma projectors can join the same groups.<small>Roku is tested on real hardware. Yamaha, LG and Optoma are written to spec but untested.</small></p></div>
+        </div>
+      </section>
 
-    <section id="hardware">
-      <div class="sec-head rv">
-        <div class="kicker">Hardware</div>
-        <h2>What runs it, and what it controls</h2>
-        <p>Amazon affiliate links &mdash; they cost you nothing extra and help keep the app free.</p>
-      </div>
-      <div class="products">
-        <a class="azcard rv" href="https://www.amazon.com/dp/B0BVFS94J5?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/71qO3Dh31VL._AC_SX300_.jpg" alt="Beelink Mini S12 Pro mini PC" loading="lazy" width="88" height="88">
-            <span>
-              <span class="aztitle">Beelink Mini S12 Pro &mdash; Intel N100, 16&nbsp;GB, 500&nbsp;GB, Windows 11</span>
-              <span class="azstars"><span class="stars"><span class="fill" style="width:90%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.5</b> <span class="count">(269 ratings)</span></span>
-            </span>
-          </span>
-          <span class="azwhy">The classic always-on box: about 6&nbsp;W at idle, fanless-quiet, and it disappears behind a monitor. Runs the sync service around the clock so your speakers stay matched even when your main PC is off.</span>
-          <span class="azbtn">View on Amazon</span>
-        </a>
-        <a class="azcard rv" href="https://www.amazon.com/dp/B0CGYFYY34?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/71TeLBggnwL._AC_SX300_.jpg" alt="Google Nest Mini 2nd generation, charcoal" loading="lazy" width="88" height="88">
-            <span>
-              <span class="aztitle">Google Nest Mini (2nd Gen) &mdash; Charcoal</span>
-              <span class="azstars"><span class="stars"><span class="fill" style="width:86%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.3</b> <span class="count">(2,153 ratings)</span></span>
-            </span>
-          </span>
-          <span class="azwhy">The cheapest way to put synced audio in every room. Google has stopped making it, so stock on Amazon comes and goes &mdash; check the buying options and the seller.</span>
-          <span class="azbtn">View on Amazon</span>
-        </a>
-        <a class="azcard rv" href="https://www.amazon.com/dp/B0FY3YXCT1?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/81uMte8VLAL._AC_SX300_.jpg" alt="Google Nest Audio speaker, chalk" loading="lazy" width="88" height="88">
-            <span>
-              <span class="aztitle">Google Nest Audio &mdash; Chalk</span>
-              <span class="azstars"><span class="stars"><span class="fill" style="width:90%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.5</b> <span class="count">(214 ratings)</span></span>
-            </span>
-          </span>
-          <span class="azwhy">Bigger sound for living spaces. Two pair into a stereo set that this app treats as one device, so a whole room moves with one slider.</span>
-          <span class="azbtn">View on Amazon</span>
-        </a>
-        <a class="azcard rv" href="https://www.amazon.com/dp/B0CLBN88HN?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/51tx4G8JuXL._AC_SX300_.jpg" alt="Google Nest Hub 2nd generation smart display" loading="lazy" width="88" height="88">
-            <span>
-              <span class="aztitle">Google Nest Hub (2nd Gen) &mdash; 7&Prime; smart display</span>
-              <span class="azstars"><span class="stars"><span class="fill" style="width:84%">&#9733;&#9733;&#9733;&#9733;&#9733;</span>&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>4.2</b> <span class="count">(1.1K ratings)</span></span>
-            </span>
-          </span>
-          <span class="azwhy">A screen for the kitchen or bedside &mdash; shows what&rsquo;s playing and joins sync groups like any speaker. Availability on Amazon varies, so it&rsquo;s worth watching the listing.</span>
-          <span class="azbtn">View on Amazon</span>
-        </a>
-        <a class="azcard search rv" href="https://www.amazon.com/s?k=google+nest+hub+max&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/61XnSLxURfL._AC_SX300_.jpg" alt="Google Nest Hub Max smart display" loading="lazy" width="88" height="88">
-            <span>
-              <span class="aztitle">Google Nest Hub Max &mdash; 10&Prime; display with big speakers</span>
-            </span>
-          </span>
-          <span class="azwhy">The big-screen, big-speaker option for the main room. Only imported units are listed on Amazon right now, so check the region and plug type before ordering.</span>
-          <span class="azbtn">Browse on Amazon</span>
-        </a>
-        <a class="azcard search rv" href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
-          <span class="azrow">
-            <img class="azimg" src="https://m.media-amazon.com/images/I/61usl1OiHoL._AC_SX300_.jpg" alt="Chromecast with Google TV, snow" loading="lazy" width="88" height="88">
-            <span>
-              <span class="aztitle">Chromecast with Google TV (4K)</span>
-            </span>
-          </span>
-          <span class="azwhy">Brings your TV into the same volume groups and schedules. Current Amazon listings are mostly resellers rather than the Google Store, so compare prices before you buy.</span>
-          <span class="azbtn">Browse on Amazon</span>
-        </a>
-      </div>
-      <p class="azdisclosure">As an Amazon Associate this site earns from qualifying purchases. Ratings shown as read in September 2026. This is an independent site, not associated with Google or any seller; cards marked &ldquo;Browse&rdquo; open an Amazon search because there is no current first-party listing to point at.</p>
-    </section>
+      <section id="screens">
+        <div class="sh">
+          <div class="n">03 &nbsp;Screenshots</div>
+          <div><h2>The real thing.</h2><p>Taken from the app running in a house with twenty Cast devices.</p></div>
+        </div>
+        <div class="shot">
+          <div><h3>Sync groups</h3><p>Tick the speakers that belong together. Each group has its own slider and playback controls, independent of Google&rsquo;s cast groups.</p></div>
+          <figure><img src="screenshots/groups.png" width="1304" height="430" loading="lazy" alt="Sync Groups view with an Everything group and its member checkboxes"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Volume from the tray</h3><p>No need to open the window. Right-click the icon, pick a group, pick a level.</p></div>
+          <figure class="narrow"><img src="screenshots/tray.png" width="364" height="719" loading="lazy" alt="Tray menu with a group submenu of 5% to 100% presets and playback controls"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Schedules</h3><p>A time, the days it runs, and the level for each group or device. Each rule switches on and off with one checkbox.</p></div>
+          <figure><img src="screenshots/schedule.png" width="1304" height="390" loading="lazy" alt="Schedule view with a 10 PM weekday rule setting the Everything group to 50%"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Every device, one list</h3><p>Live volume for each speaker, the name you gave it, and its Sync Gain.</p></div>
+          <figure><img src="screenshots/devices.png" width="1304" height="892" loading="lazy" alt="Devices view listing Google Home and Nest speakers with volume sliders and Sync Gain"></figure>
+        </div>
+      </section>
 
-    <section id="faq">
-      <div class="sec-head rv">
-        <div class="kicker">Questions</div>
-        <h2>The things people ask first</h2>
-      </div>
-      <div class="faq">
-        <details class="rv"><summary>Does it need the internet or a Google account?</summary><p>No. It speaks the Cast protocol directly to your speakers over your own network, so it keeps working if your internet drops. The only optional outbound connection is the update check, which looks at this project&rsquo;s GitHub releases and is off unless you turn it on.</p></details>
-        <details class="rv"><summary>Does it fight with the Google Home app?</summary><p>The opposite &mdash; it listens. Change a volume in the Google Home app, on your phone, or by tapping the speaker itself, and the app notices within a moment and brings the rest of that sync group to match.</p></details>
-        <details class="rv"><summary>What is Sync Gain for?</summary><p>Rooms are not equally loud. Sync Gain is a per-device multiplier from 0&ndash;200%: a speaker set to 50% gain sits at half the group&rsquo;s level, and when you change that speaker it reports back at double, so the group stays consistent. Set it once and the whole house moves together at the balance you chose.</p></details>
-        <details class="rv"><summary>Does it run without logging in to Windows?</summary><p>Not yet. It installs as a normal startup app, so it launches when you log in and then sits in the tray. On a dedicated mini PC that is left logged in, that behaves like an always-on service. A true no-login Windows service is on the list.</p></details>
-        <details class="rv"><summary>Will it work with my Google cast groups?</summary><p>Yes. Cast groups you made in the Google Home app are discovered and get their own section, with volume and playback control. They stay out of sync-group membership on purpose: a cast group&rsquo;s volume is already an aggregate of its members, so syncing it against them would double-apply every change.</p></details>
-        <details class="rv"><summary>Is it really free? What&rsquo;s the catch?</summary><p>It is free and the source is on GitHub under an open licence. There is no telemetry and nothing to buy. If it saves your sanity, the tip jar and the Amazon links are how it stays maintained.</p></details>
-      </div>
-    </section>
+      <section id="hardware">
+        <div class="sh">
+          <div class="n">04 &nbsp;Hardware</div>
+          <div><h2>What runs it, and what it controls.</h2><p>Amazon affiliate links. They cost you nothing extra and help keep the app free.</p></div>
+        </div>
+        <div class="prods">
+          <a class="prod" href="https://www.amazon.com/dp/B0BVFS94J5?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+            <div class="img"><img src="https://m.media-amazon.com/images/I/71qO3Dh31VL._AC_SX300_.jpg" alt="Beelink Mini S12 Pro mini PC" loading="lazy"></div>
+            <h3>Beelink Mini S12 Pro &mdash; Intel N100, 16&nbsp;GB, 500&nbsp;GB, Windows 11</h3>
+            <div class="rate"><b>&#9733; 4.5</b> &nbsp;269 ratings</div>
+            <p>About 6&nbsp;W at idle and nearly silent. Runs the sync around the clock, so speakers stay matched when your main PC is off.</p>
+            <span class="go">View on Amazon &rarr;</span>
+          </a>
+          <a class="prod" href="https://www.amazon.com/dp/B0CGYFYY34?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+            <div class="img"><img src="https://m.media-amazon.com/images/I/71TeLBggnwL._AC_SX300_.jpg" alt="Google Nest Mini 2nd generation, charcoal" loading="lazy"></div>
+            <h3>Google Nest Mini (2nd Gen) &mdash; Charcoal</h3>
+            <div class="rate"><b>&#9733; 4.3</b> &nbsp;2,153 ratings</div>
+            <p>The cheapest way to put synced audio in every room. Google has stopped making it, so check the buying options and the seller.</p>
+            <span class="go">View on Amazon &rarr;</span>
+          </a>
+          <a class="prod" href="https://www.amazon.com/dp/B0FY3YXCT1?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+            <div class="img"><img src="https://m.media-amazon.com/images/I/81uMte8VLAL._AC_SX300_.jpg" alt="Google Nest Audio speaker, chalk" loading="lazy"></div>
+            <h3>Google Nest Audio &mdash; Chalk</h3>
+            <div class="rate"><b>&#9733; 4.5</b> &nbsp;214 ratings</div>
+            <p>Bigger sound for living spaces. Two pair into a stereo set the app treats as one device.</p>
+            <span class="go">View on Amazon &rarr;</span>
+          </a>
+          <a class="prod" href="https://www.amazon.com/dp/B0CLBN88HN?tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+            <div class="img"><img src="https://m.media-amazon.com/images/I/51tx4G8JuXL._AC_SX300_.jpg" alt="Google Nest Hub 2nd generation smart display" loading="lazy"></div>
+            <h3>Google Nest Hub (2nd Gen) &mdash; 7&Prime; smart display</h3>
+            <div class="rate"><b>&#9733; 4.2</b> &nbsp;1.1K ratings</div>
+            <p>A screen for the kitchen or bedside. Shows what&rsquo;s playing and joins sync groups like any speaker.</p>
+            <span class="go">View on Amazon &rarr;</span>
+          </a>
+          <a class="prod" href="https://www.amazon.com/s?k=google+nest+hub+max&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+            <div class="img"><img src="https://m.media-amazon.com/images/I/61XnSLxURfL._AC_SX300_.jpg" alt="Google Nest Hub Max smart display" loading="lazy"></div>
+            <h3>Google Nest Hub Max &mdash; 10&Prime; display with big speakers</h3>
+            <div class="rate">Search results</div>
+            <p>The big-screen option for the main room. Only imported units are listed right now, so check region and plug type.</p>
+            <span class="go">Browse on Amazon &rarr;</span>
+          </a>
+          <a class="prod" href="https://www.amazon.com/s?k=chromecast+with+google+tv+4k&tag=flowerfrogmak-20" target="_blank" rel="nofollow sponsored noopener">
+            <div class="img"><img src="https://m.media-amazon.com/images/I/61usl1OiHoL._AC_SX300_.jpg" alt="Chromecast with Google TV, snow" loading="lazy"></div>
+            <h3>Chromecast with Google TV (4K)</h3>
+            <div class="rate">Search results</div>
+            <p>Brings the TV into the same groups and schedules. Listings are mostly resellers, so compare prices.</p>
+            <span class="go">Browse on Amazon &rarr;</span>
+          </a>
+        </div>
+        <p class="fine">As an Amazon Associate this site earns from qualifying purchases. Ratings as read in September 2026. &ldquo;Browse&rdquo; links open an Amazon search because there is no current first-party listing.</p>
+      </section>
 
-    <section id="donate">
-      <div class="donate-band rv">
+      <section id="faq">
+        <div class="sh">
+          <div class="n">05 &nbsp;Questions</div>
+          <div><h2>Before you install.</h2></div>
+        </div>
+        <div class="faq indent">
+          <details><summary>Does it need the internet or a Google account?</summary><p>No. It speaks the Cast protocol directly to your speakers over your own network, so it keeps working if the internet drops. The only optional outbound connection is the update check against this project&rsquo;s GitHub releases.</p></details>
+          <details><summary>Does it fight with the Google Home app?</summary><p>No, it listens to it. Change a volume in the Google Home app, by voice, or on the speaker itself, and the app picks it up and brings the rest of that sync group to match.</p></details>
+          <details><summary>What does Sync Gain do?</summary><p>It&rsquo;s a per-device multiplier from 0 to 200%. A speaker at 50% gain sits at half the group&rsquo;s level, and when you change that speaker it reports back at double, so the group stays consistent. Set it once and the whole house moves together at the balance you chose.</p></details>
+          <details><summary>Does it run without logging in to Windows?</summary><p>Not yet. It launches when you log in and sits in the tray. On a mini PC that stays logged in, that behaves like an always-on service. A true Windows service is planned.</p></details>
+          <details><summary>Does it work with my Google cast groups?</summary><p>Yes, they&rsquo;re discovered and listed separately with their own volume and playback control. They can&rsquo;t be members of a sync group, because a cast group&rsquo;s volume already comes from its speakers and syncing both would apply every change twice.</p></details>
+          <details><summary>Is it really free?</summary><p>Yes. The source is on GitHub, there is no telemetry and nothing to buy. The tip jar and the Amazon links are how it stays maintained.</p></details>
+        </div>
+      </section>
+
+      <div class="support" id="donate">
         <div>
           <h2>Did it make your house sound better?</h2>
-          <p>Volume Sync is free and open source, built and maintained by one person. If it saved you from shouting &ldquo;Hey Google, volume down&rdquo; in three rooms, a coffee goes a long way toward keeping it that way. A Ferrari would go further, but I&rsquo;ll settle for the coffee.</p>
+          <p>Volume Sync is free and open source, built and maintained by one person. If it saved you from shouting &ldquo;Hey Google, volume down&rdquo; in three rooms, a coffee goes a long way. A Ferrari would go further, but I&rsquo;ll settle for the coffee.</p>
         </div>
-        <div class="side">
-          <a class="btn donate big" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">&#9749; Buy me a coffee</a>
-          <small>Tip jar on the Pacto Tech store &middot; pick any amount &middot; Ferrari tier coming never</small>
+        <div class="r">
+          <a class="btn btn-amber" href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">Buy me a coffee</a>
+          <small>Tip jar on the Pacto Tech store &middot; any amount</small>
         </div>
       </div>
-    </section>
 
-    <section class="final rv">
-      <h2>Stop chasing volume around the house.</h2>
-      <p>Install it once on the PC that never sleeps, and your speakers stop arguing with each other.</p>
-      <div class="cta">
-        <a class="btn primary" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">&#11015; Download for Windows</a>
-        <a class="btn ghost" href="https://github.com/leecyrille/GoogleHomeVolumeSync">Read the source</a>
-      </div>
-    </section>
+      <section class="end">
+        <h2>Set it up once.<br>Stop chasing volume.</h2>
+        <p>Install it on the PC that never sleeps and your speakers stop arguing with each other.</p>
+        <div class="actions">
+          <a class="btn btn-ink" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">Download for Windows</a>
+          <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases">All releases</a>
+        </div>
+      </section>
+    </div>
   </main>
 
   <footer>
     <div class="wrap">
-      <p>Unofficial Google Home Volume Sync is an independent open-source project. Google, Google Home, Google Nest, Chromecast and related marks are trademarks of Google LLC. This project is not affiliated with, endorsed by, or sponsored by Google.</p>
-      <p>As an Amazon Associate this site earns from qualifying purchases made through the product links above.</p>
+      <div>
+        <p>Unofficial Google Home Volume Sync is an independent open-source project. Google, Google Home, Google Nest, Chromecast and related marks are trademarks of Google LLC. This project is not affiliated with, endorsed by, or sponsored by Google.</p>
+        <p>As an Amazon Associate this site earns from qualifying purchases made through the product links above.</p>
+      </div>
       <div class="links">
-        <a href="https://github.com/leecyrille/GoogleHomeVolumeSync">Source code &amp; issues on GitHub</a>
+        <a href="https://github.com/leecyrille/GoogleHomeVolumeSync">GitHub</a>
         <a href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases">Releases</a>
         <a href="https://pactotech.com/products/google-home-volume-sync-tip-jar" target="_blank" rel="noopener">Donate</a>
       </div>
@@ -580,112 +448,116 @@
 
   <script>
   (function () {
-    /* ---------- interactive sync demo ---------- */
-    var rooms = [
-      { name: "Kitchen",     gain: 1.00 },
-      { name: "Living Room", gain: 1.00 },
-      { name: "Bedroom",     gain: 0.60 },
-      { name: "Backyard",    gain: 1.50 }
+    var devices = [
+      { name: "Kitchen",       model: "Google Home",      gain: 100 },
+      { name: "Living Room",   model: "Google Home",      gain: 100 },
+      { name: "Master Bath",   model: "Google Home Mini", gain: 60 },
+      { name: "Backyard Shed", model: "Google Home Mini", gain: 150 }
     ];
-    var body = document.getElementById("demoBody");
-    var logical = 0.42;          // the group's shared level
-    var userActive = 0;          // timestamp of last interaction
-    var els = [];
+    var level = 0.3;            // the group's shared level before gains
+    var rowsEl = document.getElementById("rows");
+    var logEl = document.getElementById("log");
+    var rows = [];
 
-    function gainLabel(g) {
-      if (g > 1) return '<span class="boost">Sync Gain ' + Math.round(g * 100) + '% &middot; boosted</span>';
-      if (g < 1) return '<span class="cut">Sync Gain ' + Math.round(g * 100) + '% &middot; held back</span>';
-      return '<span>Sync Gain 100%</span>';
+    function clamp(v) { return Math.max(0, Math.min(1, v)); }
+    function stamp() {
+      var d = new Date();
+      return [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n) { return String(n).padStart(2, "0"); }).join(":");
     }
+    function log(html) { logEl.innerHTML = stamp() + "&nbsp;&nbsp;" + html; }
 
-    rooms.forEach(function (r, i) {
-      var row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML =
-        '<span class="room"><b>' + r.name + '</b>' + gainLabel(r.gain) + '</span>' +
-        '<span class="sl"><input type="range" min="0" max="100" value="0" aria-label="' + r.name + ' volume"></span>' +
-        '<span class="pct">0%</span>';
-      body.appendChild(row);
-      var input = row.querySelector("input");
-      els.push({ row: row, input: input, pct: row.querySelector(".pct"), target: 0, shown: 0, gain: r.gain });
+    devices.forEach(function (d, i) {
+      var el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML =
+        '<span class="dot"></span>' +
+        '<span class="id"><b>' + d.name + '</b><i>' + d.model + '</i></span>' +
+        '<button class="mute" title="Mute">&#128266;</button>' +
+        '<input type="range" min="0" max="100" aria-label="' + d.name + ' volume">' +
+        '<span class="pct"></span>' +
+        '<label class="gw"><span>Sync Gain</span><span class="gc">' +
+          '<input type="number" min="0" max="200" step="5" value="' + d.gain + '" aria-label="' + d.name + ' Sync Gain">' +
+          '<span class="gbar"><span class="gfill"></span><span class="gmid"></span></span>' +
+        '</span></label>';
+      rowsEl.appendChild(el);
+      var r = {
+        d: d, slider: el.querySelector("input[type=range]"), pct: el.querySelector(".pct"),
+        gain: el.querySelector("input[type=number]"), fill: el.querySelector(".gfill"),
+        mute: el.querySelector(".mute"), shown: 0, target: 0
+      };
+      rows.push(r);
 
-      input.addEventListener("input", function () {
-        userActive = Date.now();
-        var actual = Number(input.value) / 100;
-        logical = Math.min(1, Math.max(0, actual / r.gain));
-        els[i].shown = actual;            // this one tracks the finger exactly
-        els.forEach(function (e, j) {
-          e.target = Math.min(1, Math.max(0, logical * e.gain));
-          if (j !== i) e.row.classList.add("hit");
-        });
-        paint(i);
-        clearTimeout(window.__hit);
-        window.__hit = setTimeout(function () {
-          els.forEach(function (e) { e.row.classList.remove("hit"); });
-        }, 650);
+      r.slider.addEventListener("input", function () {
+        var actual = Number(r.slider.value) / 100;
+        r.shown = r.target = actual;
+        level = clamp(actual / Math.max(0.05, d.gain / 100));
+        retarget(i);
+        log("<em>" + d.name + "</em> set to " + Math.round(actual * 100) + "% &rarr; synced " + (rows.length - 1) + " devices");
       });
+      r.gain.addEventListener("change", function () {
+        d.gain = Math.max(0, Math.min(200, Math.round(Number(r.gain.value) || 100)));
+        r.gain.value = d.gain;
+        paintGain(r);
+        retarget(-1);
+        log("<em>" + d.name + "</em> Sync Gain " + d.gain + "%");
+      });
+      r.mute.addEventListener("click", function () {
+        var on = !r.mute.classList.contains("on");
+        r.mute.classList.toggle("on", on);
+        r.mute.innerHTML = on ? "&#128263;" : "&#128266;";
+        log("<em>" + d.name + "</em> " + (on ? "muted" : "unmuted"));
+      });
+      paintGain(r);
     });
 
-    function paint(skip) {
-      els.forEach(function (e, i) {
-        var v = Math.round(e.shown * 100);
-        if (i !== skip) e.input.value = v;
-        e.input.style.setProperty("--p", v + "%");
-        e.pct.textContent = v + "%";
+    function paintGain(r) {
+      r.fill.style.width = Math.min(100, r.d.gain / 2) + "%";
+      r.fill.classList.toggle("hot", r.d.gain > 100);
+    }
+    function retarget(skip) {
+      rows.forEach(function (r, j) { if (j !== skip) r.target = clamp(level * r.d.gain / 100); });
+    }
+    function paint() {
+      rows.forEach(function (r) {
+        var v = Math.round(r.shown * 100);
+        if (document.activeElement !== r.slider) r.slider.value = v;
+        r.pct.textContent = v + "%";
       });
     }
 
-    function setTargets() {
-      els.forEach(function (e) { e.target = Math.min(1, Math.max(0, logical * e.gain)); });
-    }
+    retarget(-1);
+    rows.forEach(function (r) { r.shown = r.target; });
+    paint();
 
-    /* smooth easing toward targets + gentle idle demo */
-    var nextIdle = Date.now() + 1200;
-    setTargets();
+    // Ease peers toward their targets, like status updates arriving from each speaker.
     (function tick() {
-      var idle = Date.now() - userActive > 4200;
-      if (idle && Date.now() > nextIdle) {
-        var picks = [0.18, 0.35, 0.5, 0.66, 0.28, 0.58];
-        var next = picks[Math.floor(Math.random() * picks.length)];
-        if (Math.abs(next - logical) < 0.1) next = Math.min(0.72, next + 0.22);
-        logical = next;
-        setTargets();
-        els.forEach(function (e) { e.row.classList.add("hit"); });
-        setTimeout(function () { els.forEach(function (e) { e.row.classList.remove("hit"); }); }, 900);
-        nextIdle = Date.now() + 4200;
-      }
-      var moving = false;
-      els.forEach(function (e) {
-        var d = e.target - e.shown;
-        if (Math.abs(d) > 0.002) { e.shown += d * 0.14; moving = true; }
-        else e.shown = e.target;
+      var moved = false;
+      rows.forEach(function (r) {
+        var diff = r.target - r.shown;
+        if (Math.abs(diff) > 0.003) { r.shown += diff * 0.22; moved = true; }
+        else if (r.shown !== r.target) { r.shown = r.target; moved = true; }
       });
-      if (moving) paint(-1);
+      if (moved) paint();
       requestAnimationFrame(tick);
     })();
 
-    /* ---------- scroll reveal ---------- */
-    var rv = document.querySelectorAll(".rv");
-    if ("IntersectionObserver" in window) {
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) {
-          if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
-        });
-      }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
-      rv.forEach(function (el, i) { el.style.transitionDelay = (i % 3) * 60 + "ms"; io.observe(el); });
-    } else {
-      rv.forEach(function (el) { el.classList.add("in"); });
+    // Until someone touches it, show an external change arriving now and then.
+    var touched = false;
+    rowsEl.addEventListener("pointerdown", function () { touched = true; });
+    rowsEl.addEventListener("keydown", function () { touched = true; });
+    var script = [[0, 0.45], [2, 0.30], [1, 0.22], [3, 0.51]];
+    var step = 0;
+    function simulate() {
+      if (touched) return;
+      var s = script[step++ % script.length];
+      var r = rows[s[0]];
+      r.shown = r.target = s[1];
+      level = clamp(s[1] / Math.max(0.05, r.d.gain / 100));
+      retarget(s[0]);
+      log("<em>" + r.d.name + "</em> changed to " + Math.round(s[1] * 100) + "% on the speaker &rarr; synced " + (rows.length - 1) + " devices");
+      setTimeout(simulate, 3800);
     }
-
-    /* ---------- scroll progress ---------- */
-    var bar = document.getElementById("progress");
-    function onScroll() {
-      var h = document.documentElement;
-      var p = h.scrollTop / (h.scrollHeight - h.clientHeight || 1);
-      bar.style.width = Math.min(100, Math.max(0, p * 100)) + "%";
-    }
-    document.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    setTimeout(simulate, 2200);
   })();
   </script>
 </body>
