@@ -57,6 +57,11 @@ impl YamahaActor {
                                         artist: pb["artist"].as_str().filter(|s| !s.is_empty()).map(String::from),
                                         app: pb["input"].as_str().map(String::from),
                                         supports_transport: true,
+                                        album: pb["album"].as_str().filter(|s| !s.is_empty()).map(String::from),
+                                        // albumart_url is a path on the receiver itself.
+                                        image: pb["albumart_url"].as_str()
+                                            .filter(|s| !s.is_empty())
+                                            .map(|p| if p.starts_with("http") { p.to_string() } else { format!("http://{}{}", self.ip, p) }),
                                     })
                                 } else { None };
                                 let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media }).await;

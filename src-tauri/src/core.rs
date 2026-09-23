@@ -27,6 +27,18 @@ pub struct CoreInner {
     /// Echo suppression for the sync engine: id -> (expected volume, when set).
     pub pending: HashMap<String, (f32, Instant)>,
     pub cfg_dirty: bool,
+    /// What the tray's now-playing section was last built from.
+    pub tray_sig: String,
+}
+
+/// An active playback session, for the tray's now-playing section.
+pub struct NowPlaying {
+    pub id: String,
+    pub device: String,
+    pub playing: bool,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub app: Option<String>,
 }
 
 pub struct Core {
@@ -59,7 +71,7 @@ impl Core {
         }
         info!(count = devices.len(), "core: loaded known devices from config");
         Core {
-            inner: Mutex::new(CoreInner { cfg, devices, pending: HashMap::new(), cfg_dirty: false }),
+            inner: Mutex::new(CoreInner { cfg, devices, pending: HashMap::new(), cfg_dirty: false, tray_sig: String::new() }),
             event_tx,
             lg_key_tx,
             app,
@@ -419,6 +431,70 @@ impl Core {
         self.emit_state();
     }
 
+    // ---- now playing (tray) -------------------------------------------------
+
+    /// Sessions that are playing or paused, playing first. Cast groups hold
+    /// their own session, so a group cast shows once rather than per speaker.
+    pub fn now_playing(&self) -> Vec<NowPlaying> {
+        let inner = self.inner.lock().unwrap();
+        let mut list: Vec<NowPlaying> = inner.devices.values()
+            .filter(|e| e.info.online)
+            .filter_map(|e| {
+                let m = e.info.media.as_ref()?;
+                if !m.supports_transport {
+                    return None;
+                }
+                let playing = matches!(m.state.as_str(), "PLAYING" | "BUFFERING");
+                if !playing && m.state != "PAUSED" {
+                    return None;
+                }
+                Some(NowPlaying {
+                    id: e.info.id.clone(),
+                    device: e.info.custom_name.clone().unwrap_or_else(|| e.info.friendly_name.clone()),
+                    playing,
+                    title: m.title.clone(),
+                    artist: m.artist.clone(),
+                    app: m.app.clone(),
+                })
+            })
+            .collect();
+        list.sort_by(|a, b| b.playing.cmp(&a.playing).then_with(|| a.device.to_lowercase().cmp(&b.device.to_lowercase())));
+        list
+    }
+
+    /// Rebuild the tray menu only when the set of sessions, their play/pause
+    /// state or their track changes (BUFFERING counts as playing, so the
+    /// constant PLAYING/BUFFERING flicker during streams doesn't rebuild it).
+    pub fn refresh_tray_if_playback_changed(&self) {
+        let sig: String = self.now_playing().iter()
+            .map(|n| format!("{}|{}|{:?}|{:?}", n.id, n.playing, n.title, n.artist))
+            .collect::<Vec<_>>()
+            .join(";");
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if inner.tray_sig == sig {
+                return;
+            }
+            inner.tray_sig = sig;
+        }
+        crate::tray::rebuild_tray_menu(&self.app, self);
+    }
+
+    /// Play/pause toggle, decided from the session's current state.
+    pub fn media_toggle(&self, id: &str) {
+        let playing = {
+            let inner = self.inner.lock().unwrap();
+            inner.devices.get(id)
+                .and_then(|e| e.info.media.as_ref())
+                .map(|m| matches!(m.state.as_str(), "PLAYING" | "BUFFERING"))
+        };
+        match playing {
+            Some(true) => self.send_cmd(id, DeviceCmd::Pause),
+            Some(false) => self.send_cmd(id, DeviceCmd::Play),
+            None => warn!(id=%id, "core: play/pause toggle for a device with no session"),
+        }
+    }
+
     // ---- event handling (incl. sync engine) --------------------------------
 
     pub fn handle_event(&self, ev: CoreEvent) {
@@ -429,11 +505,14 @@ impl Core {
                     e.info.online = online;
                     if online {
                         e.info.last_seen = now_ts();
+                    } else {
+                        e.info.media = None;
                     }
                     inner.cfg_dirty = true;
                 }
                 drop(inner);
                 self.emit_state();
+                self.refresh_tray_if_playback_changed();
             }
             CoreEvent::GroupMembers { id, members } => {
                 let mut inner = self.inner.lock().unwrap();
@@ -450,6 +529,7 @@ impl Core {
                 }
                 drop(inner);
                 self.emit_state();
+                self.refresh_tray_if_playback_changed();
             }
             CoreEvent::VolumeChanged { id, volume, muted } => {
                 let mut sync_targets: Vec<(String, f32)> = Vec::new();

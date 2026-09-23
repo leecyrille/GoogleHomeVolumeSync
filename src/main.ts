@@ -15,6 +15,8 @@ interface MediaInfo {
   artist?: string;
   app?: string;
   supports_transport: boolean;
+  album?: string;
+  image?: string;
 }
 interface Device {
   id: string;
@@ -72,12 +74,65 @@ function debounce(key: string, ms: number, fn: () => void) {
   debounces.set(key, window.setTimeout(fn, ms));
 }
 
+
+// ---------------- now playing ----------------
+
+function isPlaying(m: MediaInfo): boolean {
+  return m.state === "PLAYING" || m.state === "BUFFERING";
+}
+
+/** Active sessions, playing first. Speakers inside a playing cast group only
+ *  carry a "via" copy (no transport), so each group cast appears once. */
+function nowPlaying(): Device[] {
+  return state.devices
+    .filter((d) => d.online && d.media && d.media.supports_transport && (isPlaying(d.media) || d.media.state === "PAUSED"))
+    .sort((a, b) => Number(isPlaying(b.media!)) - Number(isPlaying(a.media!)) || displayName(a).localeCompare(displayName(b)));
+}
+
+function nowPlayingPanel(): string {
+  const sessions = nowPlaying();
+  if (sessions.length === 0) return "";
+  return `
+    <div class="section-title">Now Playing <span class="sub">${sessions.length} active</span></div>
+    ${sessions.map((d) => {
+      const m = d.media!;
+      const playing = isPlaying(m);
+      const title = m.title || m.app || "Unknown track";
+      const detail = [m.title ? m.artist : undefined, m.album].filter(Boolean).join(" · ");
+      return `
+      <div class="np" data-np="${esc(d.id)}">
+        ${m.image ? `<img class="np-art" src="${esc(m.image)}" alt="">` : `<div class="np-art np-blank">♪</div>`}
+        <div class="np-text">
+          <div class="np-title">${esc(title)}</div>
+          ${detail ? `<div class="np-detail">${esc(detail)}</div>` : ""}
+          <div class="np-where"><span class="np-state ${playing ? "on" : ""}">${playing ? "Playing" : "Paused"}</span> on ${esc(displayName(d))}${m.app && m.title ? ` · ${esc(m.app)}` : ""}</div>
+        </div>
+        <div class="np-ctl">
+          <button class="btn icon" data-np-act="prev" title="Previous">⏮</button>
+          <button class="btn icon np-main" data-np-act="${playing ? "pause" : "play"}" title="${playing ? "Pause" : "Play"}">${playing ? "⏸" : "▶"}</button>
+          <button class="btn icon" data-np-act="next" title="Next">⏭</button>
+        </div>
+      </div>`;
+    }).join("")}`;
+}
+
+function wireNowPlaying() {
+  content.querySelectorAll<HTMLElement>(".np").forEach((el) => {
+    const id = el.dataset.np!;
+    el.querySelectorAll<HTMLElement>("[data-np-act]").forEach((b) =>
+      b.addEventListener("click", () => invoke("media_cmd", { id, action: b.dataset.npAct })));
+    const art = el.querySelector<HTMLImageElement>("img.np-art");
+    art?.addEventListener("error", () => art.replaceWith(Object.assign(document.createElement("div"), { className: "np-art np-blank", textContent: "♪" })));
+  });
+}
+
 // ---------------- devices view ----------------
 
 function renderDevices() {
   const stale = (d: Device) => !d.online && Date.now() / 1000 - d.last_seen > 86400;
   const html = `
     <h2>Devices <span class="sub">${state.devices.filter((d) => d.online).length} online / ${state.devices.length} known</span></h2>
+    ${nowPlayingPanel()}
     <div class="toolbar">
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
@@ -99,6 +154,7 @@ function renderDevices() {
   });
   document.getElementById("add-manual")!.addEventListener("click", showAddManual);
 
+  wireNowPlaying();
   for (const d of state.devices) wireDeviceCard(d);
 }
 
@@ -192,6 +248,7 @@ function showAddManual() {
 function renderGroups() {
   content.innerHTML = `
     <h2>Sync Groups <span class="sub">members' volumes stay matched — independent of Google cast groups</span></h2>
+    ${nowPlayingPanel()}
     <div class="toolbar"><button class="btn primary" id="add-group">+ New Sync Group</button></div>
     ${state.groups.map((g) => groupCard(g)).join("")}
     ${state.groups.length === 0 ? `<div class="hint">Create a sync group to control several devices with one slider, keep their volumes in sync, and get quick tray presets.</div>` : ""}
@@ -202,6 +259,7 @@ function renderGroups() {
     const groups = [...state.groups, { id: crypto.randomUUID(), name, member_ids: [], sync_enabled: true, group_volume: 0.5 }];
     invoke("save_groups", { groups });
   });
+  wireNowPlaying();
   for (const g of state.groups) wireGroupCard(g);
 }
 

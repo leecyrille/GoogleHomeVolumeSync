@@ -32,6 +32,16 @@ pub struct CastActor {
 struct SessionState {
     media_transport_id: Option<String>,
     media_session_id: Option<i64>,
+    app_name: Option<String>,
+    track: Track,
+}
+
+#[derive(Default)]
+struct Track {
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    image: Option<String>,
 }
 
 impl CastActor {
@@ -88,7 +98,7 @@ impl CastActor {
     /// Returns true if the actor should shut down permanently.
     async fn session(&mut self, stream: Stream) -> bool {
         let (mut rd, mut wr) = tokio::io::split(stream);
-        let mut state = SessionState { media_transport_id: None, media_session_id: None };
+        let mut state = SessionState { media_transport_id: None, media_session_id: None, app_name: None, track: Track::default() };
 
         if send(&mut wr, &self.id, "receiver-0", NS_CONNECTION, &json!({"type":"CONNECT"})).await.is_err() {
             return false;
@@ -209,17 +219,22 @@ impl CastActor {
                     Some(app) => {
                         let tid = app["transportId"].as_str().unwrap_or("").to_string();
                         let app_name = app["displayName"].as_str().unwrap_or("").to_string();
+                        state.app_name = Some(app_name.trim_end_matches(" (Remote Control)").to_string())
+                            .filter(|n| !n.is_empty());
                         if state.media_transport_id.as_deref() != Some(tid.as_str()) && !tid.is_empty() {
                             info!(id=%self.id, name=%self.name, app=%app_name, transport=%tid, "cast: media app running, connecting");
                             state.media_transport_id = Some(tid.clone());
                             state.media_session_id = None;
+                            state.track = Track::default();
                             let _ = send(wr, &self.id, &tid, NS_CONNECTION, &json!({"type":"CONNECT"})).await;
                             let _ = send(wr, &self.id, &tid, NS_MEDIA, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await;
                         }
                     }
                     None => {
+                        state.app_name = None;
                         if state.media_transport_id.take().is_some() {
                             state.media_session_id = None;
+                            state.track = Track::default();
                             let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media: None }).await;
                         }
                     }
@@ -229,14 +244,34 @@ impl CastActor {
                 let empty = vec![];
                 let statuses = v["status"].as_array().unwrap_or(&empty);
                 if let Some(s) = statuses.first() {
-                    state.media_session_id = s["mediaSessionId"].as_i64();
+                    let session = s["mediaSessionId"].as_i64();
+                    if session != state.media_session_id {
+                        state.track = Track::default();
+                    }
+                    state.media_session_id = session;
+                    // Most status updates omit "media"; only the ones sent on a
+                    // track change carry metadata, so keep the last known track.
                     let meta = &s["media"]["metadata"];
+                    if meta.is_object() {
+                        let text = |k: &str| meta[k].as_str().filter(|t| !t.is_empty()).map(String::from);
+                        state.track = Track {
+                            title: text("title"),
+                            artist: text("artist").or_else(|| text("albumArtist")).or_else(|| text("subtitle")),
+                            album: text("albumName"),
+                            image: meta["images"].as_array()
+                                .and_then(|imgs| imgs.first())
+                                .and_then(|i| i["url"].as_str())
+                                .map(String::from),
+                        };
+                    }
                     let media = MediaInfo {
                         state: s["playerState"].as_str().unwrap_or("IDLE").to_string(),
-                        title: meta["title"].as_str().map(String::from),
-                        artist: meta["artist"].as_str().map(String::from),
-                        app: None,
+                        title: state.track.title.clone(),
+                        artist: state.track.artist.clone(),
+                        app: state.app_name.clone(),
                         supports_transport: true,
+                        album: state.track.album.clone(),
+                        image: state.track.image.clone(),
                     };
                     debug!(id=%self.id, name=%self.name, state=%media.state, title=?media.title, "cast: media status");
                     let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media: Some(media) }).await;

@@ -17,6 +17,11 @@ pub struct MediaInfo {
     pub artist: Option<String>,
     pub app: Option<String>,
     pub supports_transport: bool,
+    #[serde(default)]
+    pub album: Option<String>,
+    /// Artwork URL, when the source provides one.
+    #[serde(default)]
+    pub image: Option<String>,
 }
 
 /// Snapshot of a device sent to the frontend and persisted (metadata parts).
