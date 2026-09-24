@@ -70,6 +70,8 @@ pub enum DeviceCmd {
     Input(String),
     /// A remote-control key, e.g. "Home" or "Up".
     Key(String),
+    /// Move playback to this position (milliseconds).
+    Seek(u64),
     Shutdown,
 }
 
@@ -102,6 +104,16 @@ pub struct TvStatus {
     /// live-tv, input (an HDMI source; can't see inside) or app (open, no playback reported).
     #[serde(default)]
     pub activity: Option<String>,
+    /// Playback position and length in the current app, when the app reports them.
+    #[serde(default)]
+    pub position_ms: Option<u64>,
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+    /// When position_ms was read (unix ms), so the UI can advance it between polls.
+    #[serde(default)]
+    pub position_at: Option<i64>,
+    #[serde(default)]
+    pub is_live: bool,
     pub inputs: Vec<InputOption>,
     /// Headphones plugged into the remote or app (private listening).
     pub headphones: bool,

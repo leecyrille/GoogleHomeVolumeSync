@@ -52,6 +52,7 @@ pub fn run() {
             commands::set_power,
             commands::set_input,
             commands::device_key,
+            commands::seek,
             commands::recalibrate_roku,
             commands::save_groups,
             commands::set_group_volume,

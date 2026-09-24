@@ -30,7 +30,7 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 - **Per-device volume sliders** with live updates (changes made on the speaker or in the Google Home app reflect immediately).
 - **Sync groups**: put any devices in a group and control them with one slider; if one member's volume changes — in the app, in the Google Home app, or on the speaker itself — the others are forced to match.
 - **Sync Gain** (0–200% per device): balance rooms against each other. A device at 50% gain sits at half the group's level and reports its own changes back at double, so groups stay consistent while quiet or loud rooms are corrected.
-- **Now Playing** in the sidebar: track, artist and artwork for whatever is casting, with play / pause / next / previous and a vertical volume slider per sync group involved (collapses to one averaged slider when more than six are in play).
+- **Now Casting** in the sidebar: track, artist and artwork for whatever is casting, with play / pause / next / previous and a vertical volume slider per sync group involved (collapses to one averaged slider when more than six are in play).
 - **Scheduler**: weekly events (day-of-week checkboxes + time) that set volumes on devices or groups; each event has an enable checkbox.
 - **System tray**: right-click to see what's playing and control it, and set a sync group's volume in 5% steps (straight in the first menu when you have one sync group). Open App / Exit. Close button hides to tray.
 - **Custom names** for devices and groups.

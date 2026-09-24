@@ -270,3 +270,10 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .tv-act.pause { color: #f0c870; border-color: #6b5518; background: #2e2610; }
 .tv-act.idle { color: #9aa7b4; background: #1a2029; }
 .tv-act.unknown { color: #aebfd0; background: #1b2533; }
+
+/* ---- Roku playback progress ---- */
+.tv-prog { display: flex; align-items: center; gap: 10px; margin: 8px 0 0 19px; max-width: 760px; }
+.tv-prog .t { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; min-width: 44px; }
+.tv-prog .t:last-child { text-align: right; color: var(--text-dim); }
+.tv-prog input[type="range"] { flex: 1; }
+.tv-prog .live { font-size: 12px; font-weight: 600; color: #ff6b6b; }

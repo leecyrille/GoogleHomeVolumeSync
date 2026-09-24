@@ -65,7 +65,14 @@ struct Seen {
     tv: TvStatus,
     macs: Vec<String>,
     media: Option<MediaInfo>,
+    /// The input/app list changes rarely; it's re-read every minute.
+    inputs: Vec<InputOption>,
+    inputs_at: Option<std::time::Instant>,
 }
+
+/// Poll quickly while something plays so the progress bar stays accurate.
+const POLL_PLAYING: Duration = Duration::from_secs(3);
+const POLL_IDLE: Duration = Duration::from_secs(10);
 
 impl RokuActor {
     pub async fn run(mut self) {
@@ -74,14 +81,16 @@ impl RokuActor {
             .build()
             .unwrap();
         let base = format!("http://{}:8060", self.ip);
-        let mut poll = tokio::time::interval(Duration::from_secs(10));
+        let mut next_poll = tokio::time::Instant::now();
         let mut online = false;
         let mut last = Seen::default();
 
         loop {
             tokio::select! {
-                _ = poll.tick() => {
+                _ = tokio::time::sleep_until(next_poll) => {
                     self.poll_status(&client, &base, &mut online, &mut last).await;
+                    let playing = matches!(last.tv.activity.as_deref(), Some("playing" | "loading"));
+                    next_poll = tokio::time::Instant::now() + if playing { POLL_PLAYING } else { POLL_IDLE };
                 }
                 cmd = self.cmd_rx.recv() => {
                     let cmd = match cmd { Some(c) => c, None => return };
@@ -138,6 +147,10 @@ impl RokuActor {
                             tokio::time::sleep(Duration::from_millis(1500)).await;
                             self.poll_status(&client, &base, &mut online, &mut last).await;
                         }
+                        DeviceCmd::Seek(target) => {
+                            self.seek(&client, &base, target).await;
+                            self.poll_status(&client, &base, &mut online, &mut last).await;
+                        }
                         DeviceCmd::Key(key) => {
                             if REMOTE_KEYS.contains(&key.as_str()) {
                                 debug!(id=%self.id, key=%key, "roku: remote key");
@@ -186,7 +199,12 @@ impl RokuActor {
         };
         let restricted = player.is_err();
 
-        let inputs = if is_tv { self.list_inputs(client, base).await } else { Vec::new() };
+        let stale = last.inputs_at.map_or(true, |t| t.elapsed() > Duration::from_secs(60));
+        if is_tv && stale {
+            last.inputs = self.list_inputs(client, base).await;
+            last.inputs_at = Some(std::time::Instant::now());
+        }
+        let inputs = if is_tv { last.inputs.clone() } else { Vec::new() };
         let active = get_text(client, &format!("{base}/query/active-app")).await.unwrap_or_default();
         let (active_id, active_kind) = active.split("<app").nth(1)
             .and_then(|c| c.split_once('>'))
@@ -245,9 +263,22 @@ impl RokuActor {
             ""
         };
 
+        let (position_ms, duration_ms, is_live) = match player.as_ref() {
+            Ok(x) if app_playing => (
+                xml_tag(x, "position").and_then(|v| parse_ms(&v)),
+                xml_tag(x, "duration").and_then(|v| parse_ms(&v)),
+                xml_tag(x, "is_live").as_deref() == Some("true"),
+            ),
+            _ => (None, None, false),
+        };
+
         let tv = TvStatus {
             restricted,
             has_power: is_tv,
+            position_ms,
+            duration_ms,
+            position_at: position_ms.map(|_| unix_ms()),
+            is_live,
             activity: (!activity.is_empty()).then(|| activity.to_string()),
             // PowerOn = screen on. Ready / DisplayOff / Headless / Suspend all mean off.
             power,
@@ -259,9 +290,13 @@ impl RokuActor {
             model,
             firmware: xml_tag(&info, "software-version").map(|v| format!("Roku OS {v}")),
         };
-        if tv != last.tv || self.macs != last.macs {
+        // Position moves every poll while playing; only log real changes.
+        let quiet = |t: &TvStatus| TvStatus { position_ms: None, position_at: None, ..t.clone() };
+        if quiet(&tv) != quiet(&last.tv) {
             info!(id=%self.id, name=%self.name, power=?tv.power, activity=?tv.activity, showing=?tv.showing, detail=?tv.showing_detail,
                 inputs=tv.inputs.len(), restricted=tv.restricted, headphones=tv.headphones, "roku: status");
+        }
+        if tv != last.tv || self.macs != last.macs {
             last.tv = tv.clone();
             last.macs = self.macs.clone();
             let _ = self.events.send(CoreEvent::DeviceStatus { id: self.id.clone(), tv, macs: self.macs.clone() }).await;
@@ -305,6 +340,67 @@ impl RokuActor {
         tvin.iter().map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name.clone(), kind: "input".into(), icon: icon(id) })
             .chain(apps.iter().map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name.clone(), kind: "app".into(), icon: icon(id) }))
             .collect()
+    }
+
+    /// ECP has no absolute seek, so scan with Fwd/Rev while watching the
+    /// position, then press Play near the target. Lands close, not exact, and
+    /// depends on the app reporting its position while scanning.
+    async fn seek(&self, client: &reqwest::Client, base: &str, target: u64) {
+        let read = || async {
+            let x = get_text(client, &format!("{base}/query/media-player")).await?;
+            xml_tag(&x, "position").and_then(|v| parse_ms(&v))
+        };
+        let Some(start) = read().await else {
+            warn!(id=%self.id, "roku: seek: app isn't reporting a position");
+            return;
+        };
+        let forward = target > start;
+        let distance = target.abs_diff(start);
+        if distance < 4_000 {
+            return;
+        }
+        info!(id=%self.id, start, target, "roku: seek");
+        // Each press steps the scan speed up; go faster for long jumps.
+        let presses = if distance > 600_000 { 3 } else if distance > 120_000 { 2 } else { 1 };
+        let key = if forward { "Fwd" } else { "Rev" };
+        for _ in 0..presses {
+            if keypress(client, base, key).await.is_err() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+
+        let begun = std::time::Instant::now();
+        let mut prev = (start, std::time::Instant::now());
+        let mut still_since = std::time::Instant::now();
+        loop {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let Some(pos) = read().await else { break };
+            let now = std::time::Instant::now();
+            // Scan rate (ms of video per ms of wall time) to lead the Play press.
+            let rate = pos.abs_diff(prev.0) as f64 / now.duration_since(prev.1).as_millis().max(1) as f64;
+            if pos != prev.0 {
+                still_since = now;
+            }
+            prev = (pos, now);
+            let lead = (rate * 450.0) as u64 + 1_000;
+            let arrived = if forward { pos + lead >= target } else { pos <= target + lead };
+            if arrived {
+                break;
+            }
+            if now.duration_since(still_since) > Duration::from_secs(4) {
+                warn!(id=%self.id, "roku: seek: position isn't moving while scanning; stopping");
+                break;
+            }
+            if begun.elapsed() > Duration::from_secs(90) {
+                warn!(id=%self.id, "roku: seek: gave up after 90 s");
+                break;
+            }
+        }
+        let _ = keypress(client, base, "Play").await;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let landed = read().await;
+        info!(id=%self.id, target, landed=?landed, "roku: seek done");
     }
 
     async fn set_power(&self, client: &reqwest::Client, base: &str, on: bool) {
@@ -584,4 +680,13 @@ async fn get_text(client: &reqwest::Client, url: &str) -> Option<String> {
         Ok(r) if r.status().is_success() => r.text().await.ok(),
         _ => None,
     }
+}
+
+/// "12345 ms" -> 12345
+fn parse_ms(v: &str) -> Option<u64> {
+    v.split_whitespace().next()?.parse().ok()
+}
+
+fn unix_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }

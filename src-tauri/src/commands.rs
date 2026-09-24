@@ -73,6 +73,12 @@ pub fn set_input(core: CoreState, id: String, input: String) {
 }
 
 #[tauri::command]
+pub fn seek(core: CoreState, id: String, position_ms: u64) {
+    info!(id=%id, position_ms, "ui: seek");
+    core.send_cmd(&id, DeviceCmd::Seek(position_ms));
+}
+
+#[tauri::command]
 pub fn device_key(core: CoreState, id: String, key: String) {
     info!(id=%id, key=%key, "ui: remote key");
     core.send_cmd(&id, DeviceCmd::Key(key));

@@ -46,6 +46,10 @@ interface TvStatus {
   showing_icon?: string | null;
   showing_detail?: string | null;
   activity?: string | null;
+  position_ms?: number | null;
+  duration_ms?: number | null;
+  position_at?: number | null;
+  is_live?: boolean;
   inputs: InputOption[];
   headphones: boolean;
   model?: string | null;
@@ -148,7 +152,7 @@ function renderSide() {
   const avg = items.reduce((a, i) => a + i.level, 0) / Math.max(1, items.length);
 
   sideEl.innerHTML = `
-    <div class="side-head">Now Playing</div>
+    <div class="side-head">Now Casting</div>
     ${shown.map((d) => {
       const m = d.media!;
       const playing = isPlaying(m);
@@ -230,10 +234,10 @@ function renderDevices() {
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
     </div>
-    ${section("Devices", state.devices.filter((d) => !d.is_cast_group && d.backend === "cast"), stale)}
-    ${section("Google Cast Groups", state.devices.filter((d) => d.is_cast_group), stale)}
     ${section("Roku TVs", state.devices.filter((d) => d.backend === "roku"), stale)}
     ${section("Other Devices", state.devices.filter((d) => !["cast", "roku"].includes(d.backend)), stale)}
+    ${section("Google Devices", state.devices.filter((d) => !d.is_cast_group && d.backend === "cast"), stale)}
+    ${section("Google Cast Groups", state.devices.filter((d) => d.is_cast_group), stale)}
     ${state.devices.length === 0 ? `<div class="hint">Searching for Google Cast devices on your network…</div>` : ""}
   `;
   content.innerHTML = html;
@@ -303,6 +307,32 @@ const ACTIVITY: Record<string, [string, string, string]> = {
   app: ["App open", "unknown", "An app is open but isn't reporting playback. Some apps, like ambient or fireplace videos, play without reporting it"],
 };
 
+function fmtTime(ms: number): string {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** Position now, advanced from the last poll while playing. */
+function livePosition(tv: TvStatus): number {
+  const base = tv.position_ms ?? 0;
+  if (tv.activity !== "playing" || !tv.position_at) return base;
+  return Math.min(tv.duration_ms ?? Infinity, base + (Date.now() - tv.position_at));
+}
+
+function progressRow(d: Device): string {
+  const tv = d.tv!;
+  if (tv.position_ms == null || !(tv.activity === "playing" || tv.activity === "paused")) return "";
+  if (tv.is_live || !tv.duration_ms) return `<div class="tv-prog"><span class="live">● Live</span></div>`;
+  const pos = livePosition(tv);
+  return `
+    <div class="tv-prog" data-prog="${esc(d.id)}" title="Drag to seek. The TV has no direct seek, so this fast-forwards or rewinds to near the spot.">
+      <span class="t" data-pos>${fmtTime(pos)}</span>
+      <input type="range" min="0" max="${tv.duration_ms}" step="1000" value="${Math.round(pos)}" data-seek>
+      <span class="t">${fmtTime(tv.duration_ms)}</span>
+    </div>`;
+}
+
 /** Screen, input picker and remote for TVs that report them (Roku). */
 function tvRow(d: Device): string {
   const tv = d.tv;
@@ -335,7 +365,7 @@ function tvRow(d: Device): string {
       ${d.backend === "roku" ? `<button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>` : ""}
     </div>${tv.restricted ? `
     <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
-      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${d.backend !== "roku" ? "" : `
+      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${progressRow(d)}${d.backend !== "roku" ? "" : `
     <div class="remote">
       <div class="dpad">
         <span></span><button class="btn" data-key="Up" title="Up">▲</button><span></span>
@@ -360,6 +390,17 @@ function wireDeviceCard(d: Device) {
   const inputSel = q('[data-act="input"]') as HTMLSelectElement | null;
   inputSel?.addEventListener("change", () => { invoke("set_input", { id: d.id, input: inputSel.value }); inputSel.blur(); });
   card.querySelectorAll<HTMLImageElement>(".tv-now img").forEach((img) => img.addEventListener("error", () => img.remove()));
+  const seekEl = card.querySelector<HTMLInputElement>("[data-seek]");
+  if (seekEl) {
+    const posEl = card.querySelector<HTMLElement>("[data-pos]")!;
+    const key = "seek:" + d.id;
+    seekEl.addEventListener("pointerdown", () => dragging.add(key));
+    seekEl.addEventListener("input", () => { posEl.textContent = fmtTime(Number(seekEl.value)); });
+    seekEl.addEventListener("change", () => {
+      invoke("seek", { id: d.id, positionMs: Number(seekEl.value) });
+      setTimeout(() => { dragging.delete(key); renderIfPending(); }, 1500);
+    });
+  }
   card.querySelectorAll<HTMLElement>("[data-key]").forEach((b) =>
     b.addEventListener("click", () => invoke("device_key", { id: d.id, key: b.dataset.key })));
 
@@ -406,9 +447,9 @@ function showAddManual() {
 
 /** Device types in a sync group's member picker. Google cast groups are left out on purpose. */
 const MEMBER_KINDS: { key: string; title: string; match: (d: Device) => boolean }[] = [
-  { key: "cast", title: "Google speakers & displays", match: (d) => d.backend === "cast" },
   { key: "roku", title: "Roku TVs", match: (d) => d.backend === "roku" },
   { key: "other", title: "Other devices", match: (d) => d.backend !== "cast" && d.backend !== "roku" },
+  { key: "cast", title: "Google speakers & displays", match: (d) => d.backend === "cast" },
 ];
 
 function renderGroups() {
@@ -796,3 +837,16 @@ async function maybeCheckUpdates() {
 // sidebar footer links (present on every view)
 document.getElementById("nav-donate")?.addEventListener("click", () => openUrl(DONATE_URL));
 document.getElementById("nav-site")?.addEventListener("click", () => openUrl(SITE_URL));
+
+// Keep Roku progress bars moving between polls.
+setInterval(() => {
+  document.querySelectorAll<HTMLElement>("[data-prog]").forEach((el) => {
+    const d = state.devices.find((x) => x.id === el.dataset.prog);
+    if (!d?.tv || dragging.has("seek:" + d.id)) return;
+    const pos = livePosition(d.tv);
+    const input = el.querySelector<HTMLInputElement>("[data-seek]");
+    if (input) input.value = String(Math.round(pos));
+    const t = el.querySelector<HTMLElement>("[data-pos]");
+    if (t) t.textContent = fmtTime(pos);
+  });
+}, 1000);
