@@ -45,17 +45,9 @@ pub struct DeviceInfo {
     /// to the group for sync purposes.
     #[serde(default = "default_gain")]
     pub sync_gain: f32,
-    /// The device only allows limited control (Roku "Control by mobile apps" = Limited).
+    /// Screen state for TVs that report it (Roku).
     #[serde(default)]
-    pub restricted: bool,
-    /// Screen power for devices that report it (Roku TVs); None = not supported/unknown.
-    #[serde(default)]
-    pub power: Option<bool>,
-    /// What the screen is showing: an input ("HDMI 2") or an app ("Netflix").
-    #[serde(default)]
-    pub input: Option<String>,
-    #[serde(default)]
-    pub inputs: Vec<InputOption>,
+    pub tv: Option<TvStatus>,
     /// For Google cast groups: the device ids of the speakers in it.
     #[serde(default)]
     pub members: Vec<String>,
@@ -85,6 +77,29 @@ pub enum DeviceCmd {
 pub struct InputOption {
     pub id: String,
     pub label: String,
+    /// "input" (HDMI, Live TV..) or "app" (Netflix..).
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct TvStatus {
+    /// "Control by mobile apps" is Limited: power, inputs and app queries are refused.
+    pub restricted: bool,
+    /// None when the device has no screen power (a streaming stick).
+    pub power: Option<bool>,
+    /// What's on screen: an input ("Nintendo Switch") or an app ("Netflix").
+    pub showing: Option<String>,
+    pub showing_icon: Option<String>,
+    /// Extra context: the Live TV channel and programme, or "Playing" in an app.
+    pub showing_detail: Option<String>,
+    pub inputs: Vec<InputOption>,
+    /// Headphones plugged into the remote or app (private listening).
+    pub headphones: bool,
+    pub model: Option<String>,
+    pub firmware: Option<String>,
 }
 
 /// Events emitted by backend actors toward the core.
@@ -96,7 +111,7 @@ pub enum CoreEvent {
     /// Members of a Google cast group (normalized device ids), via multizone.
     GroupMembers { id: String, members: Vec<String> },
     /// Power/input state from devices that report it, plus MAC addresses for wake-on-LAN.
-    DeviceStatus { id: String, restricted: bool, power: Option<bool>, input: Option<String>, inputs: Vec<InputOption>, macs: Vec<String> },
+    DeviceStatus { id: String, tv: TvStatus, macs: Vec<String> },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

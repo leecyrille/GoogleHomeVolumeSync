@@ -12,7 +12,7 @@
 //! mobile apps" setting is Limited refuse /query/apps, so a fixed input list
 //! is used there.
 
-use crate::types::{CoreEvent, DeviceCmd, InputOption};
+use crate::types::{CoreEvent, DeviceCmd, InputOption, MediaInfo, TvStatus};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -50,14 +50,12 @@ const FALLBACK_INPUTS: &[(&str, &str)] = &[
     ("key:InputAV1", "AV"),
 ];
 
-#[derive(Default, PartialEq, Clone)]
-struct Status {
-    /// "Control by mobile apps" is Limited: power, inputs and app queries are refused.
-    restricted: bool,
-    power: Option<bool>,
-    input: Option<String>,
-    inputs: Vec<InputOption>,
+/// What was last reported, so events only go out on change.
+#[derive(Default)]
+struct Seen {
+    tv: TvStatus,
     macs: Vec<String>,
+    media: Option<MediaInfo>,
 }
 
 impl RokuActor {
@@ -69,7 +67,7 @@ impl RokuActor {
         let base = format!("http://{}:8060", self.ip);
         let mut poll = tokio::time::interval(Duration::from_secs(10));
         let mut online = false;
-        let mut last = Status::default();
+        let mut last = Seen::default();
 
         loop {
             tokio::select! {
@@ -147,11 +145,8 @@ impl RokuActor {
         }
     }
 
-    async fn poll_status(&mut self, client: &reqwest::Client, base: &str, online: &mut bool, last: &mut Status) {
-        let info = match client.get(format!("{base}/query/device-info")).send().await {
-            Ok(r) if r.status().is_success() => r.text().await.ok(),
-            _ => None,
-        };
+    async fn poll_status(&mut self, client: &reqwest::Client, base: &str, online: &mut bool, last: &mut Seen) {
+        let info = get_text(client, &format!("{base}/query/device-info")).await;
         let ok = info.is_some();
         if ok != *online {
             *online = ok;
@@ -166,56 +161,112 @@ impl RokuActor {
                 self.macs.push(m);
             }
         }
-        let power = if is_tv {
-            // PowerOn = screen on. Ready / DisplayOff / Headless / Suspend all mean off.
-            xml_tag(&info, "power-mode").map(|p| p == "PowerOn")
+        let model = match (xml_tag(&info, "vendor-name"), xml_tag(&info, "model-name")) {
+            (Some(v), Some(m)) if !v.is_empty() => Some(format!("{v} {m}")),
+            (_, m) => m,
+        };
+
+        // Limited mode refuses the media-player query with a 403 / explanatory text.
+        let player = match client.get(format!("{base}/query/media-player")).send().await {
+            Ok(r) => {
+                let code = r.status().as_u16();
+                let text = r.text().await.unwrap_or_default();
+                if code == 403 || text.contains("Limited mode") { Err(()) } else { Ok(text) }
+            }
+            Err(_) => Ok(String::new()),
+        };
+        let restricted = player.is_err();
+
+        let inputs = if is_tv { self.list_inputs(client, base).await } else { Vec::new() };
+        let active = get_text(client, &format!("{base}/query/active-app")).await.unwrap_or_default();
+        let (active_id, active_kind) = active.split("<app").nth(1)
+            .and_then(|c| c.split_once('>'))
+            .map(|(attrs, _)| (xml_attr(attrs, "id").unwrap_or_default(), xml_attr(attrs, "type").unwrap_or_default()))
+            .unwrap_or_default();
+        let showing = active_label(&active, &inputs);
+        let showing_icon = (!active_id.is_empty() && active_kind != "home")
+            .then(|| format!("http://{}:8060/query/icon/{}", self.ip, active_id));
+
+        // Playback inside an app: "play" / "pause" (the TV UI and HDMI inputs report "close").
+        let player_state = player.as_ref().ok()
+            .and_then(|x| x.split("<player").nth(1))
+            .and_then(|c| c.split_once('>'))
+            .and_then(|(attrs, _)| xml_attr(attrs, "state"))
+            .unwrap_or_default();
+        let app_playing = active_kind == "appl" && (player_state == "play" || player_state == "pause");
+
+        let showing_detail = if active_id == "tvinput.dtv" {
+            get_text(client, &format!("{base}/query/tv-active-channel")).await.and_then(|x| {
+                let num = xml_tag(&x, "number").filter(|v| !v.is_empty());
+                let name = xml_tag(&x, "name").filter(|v| !v.is_empty());
+                let program = xml_tag(&x, "program-title").filter(|v| !v.is_empty());
+                let channel = [num, name].into_iter().flatten().collect::<Vec<_>>().join(" ");
+                let parts: Vec<String> = [Some(channel).filter(|c| !c.is_empty()), program].into_iter().flatten().collect();
+                (!parts.is_empty()).then(|| parts.join(" · "))
+            })
+        } else if app_playing {
+            Some(if player_state == "play" { "Playing".into() } else { "Paused".into() })
         } else {
             None
         };
 
-        let inputs = if is_tv { self.list_inputs(client, base).await } else { Vec::new() };
-        let input = match client.get(format!("{base}/query/active-app")).send().await {
-            Ok(r) if r.status().is_success() => r.text().await.ok().and_then(|x| active_label(&x, &inputs)),
-            _ => None,
+        let tv = TvStatus {
+            restricted,
+            // PowerOn = screen on. Ready / DisplayOff / Headless / Suspend all mean off.
+            power: if is_tv { xml_tag(&info, "power-mode").map(|p| p == "PowerOn") } else { None },
+            showing,
+            showing_icon: showing_icon.clone(),
+            showing_detail,
+            inputs,
+            headphones: xml_tag(&info, "headphones-connected").as_deref() == Some("true"),
+            model,
+            firmware: xml_tag(&info, "software-version").map(|v| format!("Roku OS {v}")),
         };
+        if tv != last.tv || self.macs != last.macs {
+            info!(id=%self.id, name=%self.name, power=?tv.power, showing=?tv.showing, detail=?tv.showing_detail,
+                inputs=tv.inputs.len(), restricted=tv.restricted, headphones=tv.headphones, "roku: status");
+            last.tv = tv.clone();
+            last.macs = self.macs.clone();
+            let _ = self.events.send(CoreEvent::DeviceStatus { id: self.id.clone(), tv, macs: self.macs.clone() }).await;
+        }
 
-        // Limited mode refuses the media-player query with a 403 / explanatory text.
-        let restricted = match client.get(format!("{base}/query/media-player")).send().await {
-            Ok(r) => r.status().as_u16() == 403 || r.text().await.map(|t| t.contains("Limited mode")).unwrap_or(false),
-            Err(_) => false,
+        // A streaming app that's playing counts as a media session, so it
+        // shows in Now Playing with transport controls.
+        let media = app_playing.then(|| MediaInfo {
+            state: if player_state == "play" { "PLAYING".into() } else { "PAUSED".into() },
+            title: None,
+            artist: None,
+            app: last.tv.showing.clone(),
+            supports_transport: true,
+            album: None,
+            image: showing_icon,
+        });
+        let changed = match (&media, &last.media) {
+            (Some(a), Some(b)) => a.state != b.state || a.app != b.app,
+            (None, None) => false,
+            _ => true,
         };
-        let status = Status { restricted, power, input, inputs, macs: self.macs.clone() };
-        if status != *last {
-            info!(id=%self.id, name=%self.name, power=?status.power, input=?status.input, inputs=status.inputs.len(), restricted=status.restricted, "roku: status");
-            *last = status.clone();
-            let _ = self.events.send(CoreEvent::DeviceStatus {
-                id: self.id.clone(),
-                restricted: status.restricted,
-                power: status.power,
-                input: status.input,
-                inputs: status.inputs,
-                macs: status.macs,
-            }).await;
+        if changed {
+            last.media = media.clone();
+            let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media }).await;
         }
     }
 
-    /// Named inputs and channels from /query/apps when the TV allows it,
+    /// Named inputs and apps from /query/apps when the TV allows it,
     /// otherwise the fixed input-key list.
     async fn list_inputs(&self, client: &reqwest::Client, base: &str) -> Vec<InputOption> {
-        let apps = match client.get(format!("{base}/query/apps")).send().await {
-            Ok(r) if r.status().is_success() => r.text().await.unwrap_or_default(),
-            _ => String::new(),
-        };
+        let apps = get_text(client, &format!("{base}/query/apps")).await.unwrap_or_default();
         let parsed = parse_apps(&apps);
         if parsed.is_empty() {
             return FALLBACK_INPUTS.iter()
-                .map(|(id, label)| InputOption { id: id.to_string(), label: label.to_string() })
+                .map(|(id, label)| InputOption { id: id.to_string(), label: label.to_string(), kind: "input".into(), icon: None })
                 .collect();
         }
-        // TV inputs first, in the TV's order, then channels.
-        let (tvin, channels): (Vec<_>, Vec<_>) = parsed.into_iter().partition(|(_, kind, _)| kind == "tvin");
-        tvin.into_iter().chain(channels)
-            .map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name })
+        // TV inputs first, in the TV's order, then apps.
+        let (tvin, apps): (Vec<_>, Vec<_>) = parsed.into_iter().partition(|(_, kind, _)| kind == "tvin");
+        let icon = |id: &str| Some(format!("http://{}:8060/query/icon/{}", self.ip, id));
+        tvin.iter().map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name.clone(), kind: "input".into(), icon: icon(id) })
+            .chain(apps.iter().map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name.clone(), kind: "app".into(), icon: icon(id) }))
             .collect()
     }
 
@@ -489,4 +540,11 @@ async fn send_wake_on_lan(mac: &str) -> std::io::Result<()> {
         sock.send_to(&packet, ("255.255.255.255", port)).await?;
     }
     Ok(())
+}
+
+async fn get_text(client: &reqwest::Client, url: &str) -> Option<String> {
+    match client.get(url).send().await {
+        Ok(r) if r.status().is_success() => r.text().await.ok(),
+        _ => None,
+    }
 }

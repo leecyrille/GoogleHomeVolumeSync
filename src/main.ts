@@ -33,12 +33,21 @@ interface Device {
   muted: boolean;
   can_absolute_volume: boolean;
   sync_gain: number;
-  restricted?: boolean;
-  power?: boolean | null;
-  input?: string | null;
-  inputs: { id: string; label: string }[];
+  tv?: TvStatus | null;
   members: string[];
   media?: MediaInfo;
+}
+interface InputOption { id: string; label: string; kind: string; icon?: string | null; }
+interface TvStatus {
+  restricted: boolean;
+  power?: boolean | null;
+  showing?: string | null;
+  showing_icon?: string | null;
+  showing_detail?: string | null;
+  inputs: InputOption[];
+  headphones: boolean;
+  model?: string | null;
+  firmware?: string | null;
 }
 interface Group {
   id: string;
@@ -257,7 +266,7 @@ function deviceCard(d: Device, stale: boolean): string {
       <span class="dot ${d.online ? "on" : ""}" title="${d.online ? "Online" : "Offline"}"></span>
       <div class="dev-id" title="${esc(d.friendly_name)} · ${esc(d.model)} · ${esc(d.ip)}">
         <div class="dev-name"><input value="${esc(displayName(d))}" data-act="rename" title="Click to rename (blank = reset to device name)" /></div>
-        <div class="dev-meta">${d.is_cast_group ? "cast group · " : ""}${esc(d.model)}${!d.online ? ` · last seen ${ago(d.last_seen)}` : ""}</div>
+        <div class="dev-meta">${d.is_cast_group ? "cast group · " : ""}${esc(d.model)}${d.tv?.firmware ? ` · ${esc(d.tv.firmware)}` : ""}${!d.online ? ` · last seen ${ago(d.last_seen)}` : ""}</div>
       </div>
       <button class="btn icon ${d.muted ? "muted-on" : ""}" data-act="mute" title="Mute">${d.muted ? "🔇" : "🔊"}</button>
       <input type="range" min="0" max="100" value="${pct}" data-act="vol" />
@@ -280,21 +289,35 @@ function deviceCard(d: Device, stale: boolean): string {
   </div>`;
 }
 
-const openRemotes = new Set<string>();
-
-/** Power, input and remote controls for TVs that report them (Roku). */
+/** Screen, input picker and remote for TVs that report them (Roku). */
 function tvRow(d: Device): string {
-  const known = d.inputs.some((i) => i.label === d.input);
-  const power = d.power == null ? "" : `
-      <button class="btn tv-power ${d.power ? "on" : ""}" data-act="power" title="Turn the TV ${d.power ? "off" : "on"}">⏻ ${d.power ? "On" : "Off"}</button>`;
-  const inputs = d.inputs.length === 0 ? "" : `
-      <label class="tv-input">Input
-        <select data-act="input">
-          ${known ? "" : `<option value="" selected disabled>${esc(d.input || "Choose…")}</option>`}
-          ${d.inputs.map((i) => `<option value="${esc(i.id)}" ${i.label === d.input ? "selected" : ""}>${esc(i.label)}</option>`).join("")}
-        </select>
-      </label>`;
-  const remote = openRemotes.has(d.id) ? `
+  const tv = d.tv;
+  if (!tv) return "";
+  const optionList = (kind: string) => tv.inputs.filter((i) => i.kind === kind)
+    .map((i) => `<option value="${esc(i.id)}">${esc(i.label)}</option>`).join("");
+  const inputs = tv.inputs.length === 0 ? "" : `
+      <select data-act="input" title="Switch input or open an app">
+        <option value="" selected disabled>Switch to…</option>
+        ${tv.inputs.some((i) => i.kind === "app")
+          ? `<optgroup label="Inputs">${optionList("input")}</optgroup><optgroup label="Apps">${optionList("app")}</optgroup>`
+          : optionList("input")}
+      </select>`;
+  const showing = tv.power === false ? `<span class="tv-now off">Screen off</span>` : tv.showing ? `
+      <span class="tv-now" title="Now showing">
+        ${tv.showing_icon ? `<img src="${esc(tv.showing_icon)}" alt="">` : ""}
+        <span><b>${esc(tv.showing)}</b>${tv.showing_detail ? `<i>${esc(tv.showing_detail)}</i>` : ""}</span>
+      </span>` : "";
+  return `
+    <div class="tv-row">
+      ${tv.power == null ? "" : `<button class="btn tv-power ${tv.power ? "on" : ""}" data-act="power" title="Turn the TV ${tv.power ? "off" : "on"}">⏻ ${tv.power ? "On" : "Off"}</button>`}
+      ${showing}
+      ${tv.headphones ? `<span class="tv-badge" title="Headphones are connected (private listening), so the TV speakers are silent">🎧 Private listening</span>` : ""}
+      <span class="grow"></span>
+      ${inputs}
+      <button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>
+    </div>${tv.restricted ? `
+    <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
+      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}
     <div class="remote">
       <div class="dpad">
         <span></span><button class="btn" data-key="Up" title="Up">▲</button><span></span>
@@ -306,15 +329,7 @@ function tvRow(d: Device): string {
         <div><button class="btn" data-key="Rev" title="Rewind">⏪</button><button class="btn" data-key="Play" title="Play/Pause">⏯</button><button class="btn" data-key="Fwd" title="Fast forward">⏩</button></div>
         <div><button class="btn" data-key="InstantReplay" title="Instant replay">↺ Replay</button><button class="btn" data-key="ChannelUp" title="Channel up">CH ▲</button><button class="btn" data-key="ChannelDown" title="Channel down">CH ▼</button></div>
       </div>
-    </div>` : "";
-  return `
-    <div class="tv-row">
-      ${power}${inputs}
-      <button class="btn" data-act="remote">${openRemotes.has(d.id) ? "Hide remote" : "Remote"}</button>
-      <button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>
-    </div>${d.restricted ? `
-    <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
-      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${remote}`;
+    </div>`;
 }
 
 function wireDeviceCard(d: Device) {
@@ -322,13 +337,10 @@ function wireDeviceCard(d: Device) {
   if (!card) return;
   const q = (sel: string) => card.querySelector(sel) as HTMLElement | null;
 
-  q('[data-act="power"]')?.addEventListener("click", () => invoke("set_power", { id: d.id, on: !d.power }));
+  q('[data-act="power"]')?.addEventListener("click", () => invoke("set_power", { id: d.id, on: !d.tv?.power }));
   const inputSel = q('[data-act="input"]') as HTMLSelectElement | null;
   inputSel?.addEventListener("change", () => { invoke("set_input", { id: d.id, input: inputSel.value }); inputSel.blur(); });
-  q('[data-act="remote"]')?.addEventListener("click", () => {
-    if (openRemotes.has(d.id)) openRemotes.delete(d.id); else openRemotes.add(d.id);
-    render();
-  });
+  card.querySelectorAll<HTMLImageElement>(".tv-now img").forEach((img) => img.addEventListener("error", () => img.remove()));
   card.querySelectorAll<HTMLElement>("[data-key]").forEach((b) =>
     b.addEventListener("click", () => invoke("device_key", { id: d.id, key: b.dataset.key })));
 

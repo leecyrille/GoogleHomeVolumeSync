@@ -157,10 +157,7 @@ impl Core {
                         muted: false,
                         can_absolute_volume: true,
                         sync_gain: 1.0,
-                        restricted: false,
-                        power: None,
-                        input: None,
-                        inputs: Vec::new(),
+                        tv: None,
                         members: Vec::new(),
                         media: None,
                     },
@@ -240,10 +237,7 @@ impl Core {
                     muted: false,
                     can_absolute_volume: can_abs,
                     sync_gain: 1.0,
-                    restricted: false,
-                    power: None,
-                    input: None,
-                    inputs: Vec::new(),
+                    tv: None,
                     members: Vec::new(),
                     media: None,
                 },
@@ -528,13 +522,13 @@ impl Core {
                 self.emit_state();
                 self.refresh_tray_if_playback_changed();
             }
-            CoreEvent::DeviceStatus { id, restricted, power, input, inputs, macs } => {
+            CoreEvent::DeviceStatus { id, tv, macs } => {
                 let mut inner = self.inner.lock().unwrap();
                 if let Some(e) = inner.devices.get_mut(&id) {
-                    e.info.restricted = restricted;
-                    e.info.power = power;
-                    e.info.input = input;
-                    e.info.inputs = inputs;
+                    if let Some(model) = &tv.model {
+                        e.info.model = model.clone();
+                    }
+                    e.info.tv = Some(tv);
                 }
                 let key = id.clone();
                 if let Some(m) = inner.cfg.manual_devices.iter_mut()

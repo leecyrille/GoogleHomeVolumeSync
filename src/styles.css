@@ -223,8 +223,6 @@ input[type="range"].vert {
 /* ---- TV controls (Roku) ---- */
 .tv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; padding-left: 19px; }
 .tv-power.on { color: var(--ok); border-color: var(--ok); }
-.tv-input { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
-.tv-input select { padding: 4px 8px; }
 .tv-warn { margin: 8px 0 2px 19px; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: #f0d58a; background: #2e2610; border: 1px solid #6b5518; border-radius: 7px; }
 .tv-warn b { color: #ffe7a3; font-weight: 600; }
 .remote { display: flex; gap: 18px; align-items: center; margin: 10px 0 4px 19px; }
@@ -250,3 +248,11 @@ input[type="range"].vert {
 .member-head { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .7px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
 button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 500; }
 .member-kind .member-list { margin-top: 8px; }
+
+.tv-row select { padding: 5px 8px; }
+.tv-now { display: inline-flex; align-items: center; gap: 8px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px 3px 3px; min-width: 0; }
+.tv-now.off { padding: 5px 10px; color: var(--text-dim); font-size: 12.5px; }
+.tv-now img { height: 26px; width: auto; max-width: 46px; border-radius: 4px; object-fit: contain; background: #000; }
+.tv-now b { font-size: 13px; font-weight: 600; }
+.tv-now i { font-style: normal; font-size: 12px; color: var(--text-dim); margin-left: 8px; }
+.tv-badge { font-size: 12px; color: #c9b8ff; background: #241d3d; border: 1px solid #4a3b7a; border-radius: 99px; padding: 3px 10px; }
