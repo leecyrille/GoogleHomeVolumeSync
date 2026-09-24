@@ -98,6 +98,10 @@ pub struct TvStatus {
     pub showing_icon: Option<String>,
     /// Extra context: the Live TV channel and programme, or "Playing" in an app.
     pub showing_detail: Option<String>,
+    /// What the TV is doing: off, screensaver, home, playing, paused, loading,
+    /// live-tv, input (an HDMI source; can't see inside) or app (open, no playback reported).
+    #[serde(default)]
+    pub activity: Option<String>,
     pub inputs: Vec<InputOption>,
     /// Headphones plugged into the remote or app (private listening).
     pub headphones: bool,

@@ -45,6 +45,7 @@ interface TvStatus {
   showing?: string | null;
   showing_icon?: string | null;
   showing_detail?: string | null;
+  activity?: string | null;
   inputs: InputOption[];
   headphones: boolean;
   model?: string | null;
@@ -290,6 +291,18 @@ function deviceCard(d: Device, stale: boolean): string {
   </div>`;
 }
 
+/** Activity pill: [label, tone, tooltip]. */
+const ACTIVITY: Record<string, [string, string, string]> = {
+  playing: ["Playing", "play", "An app is playing video or audio"],
+  "live-tv": ["Watching Live TV", "play", "Tuned to an antenna channel"],
+  paused: ["Paused", "pause", "Playback in the app is paused"],
+  loading: ["Loading", "pause", "The app is starting or buffering"],
+  screensaver: ["Idle · screensaver", "idle", "Nobody has touched the remote for a while"],
+  home: ["Idle · home screen", "idle", "Sitting on the Roku home screen"],
+  input: ["On an input", "unknown", "Showing an HDMI source; the TV can't tell whether that device is playing"],
+  app: ["App open", "unknown", "An app is open but isn't reporting playback. Some apps, like ambient or fireplace videos, play without reporting it"],
+};
+
 /** Screen, input picker and remote for TVs that report them (Roku). */
 function tvRow(d: Device): string {
   const tv = d.tv;
@@ -315,6 +328,7 @@ function tvRow(d: Device): string {
         <button class="${tv.power === true ? "on" : ""}" data-power="on">⏻ On</button><button class="${tv.power === false ? "off" : ""}" data-power="off">Off</button>
       </div>` : ""}
       ${showing}
+      ${tv.power !== false && tv.activity && ACTIVITY[tv.activity] ? `<span class="tv-act ${ACTIVITY[tv.activity][1]}" title="${ACTIVITY[tv.activity][2]}">${ACTIVITY[tv.activity][0]}</span>` : ""}
       ${tv.headphones ? `<span class="tv-badge" title="Headphones are connected (private listening), so the TV speakers are silent">🎧 Private listening</span>` : ""}
       <span class="grow"></span>
       ${inputs}

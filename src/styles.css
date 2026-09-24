@@ -263,3 +263,10 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .pwr button:hover { color: var(--accent); }
 .pwr button.on { background: #173a26; color: var(--ok); font-weight: 600; }
 .pwr button.off { background: #2a1d1f; color: #e39a9a; font-weight: 600; }
+
+/* ---- TV activity ---- */
+.tv-act { font-size: 12px; font-weight: 600; border-radius: 99px; padding: 3px 10px; border: 1px solid var(--border); color: var(--text-dim); cursor: help; }
+.tv-act.play { color: var(--ok); border-color: #2a6b45; background: #13301f; }
+.tv-act.pause { color: #f0c870; border-color: #6b5518; background: #2e2610; }
+.tv-act.idle { color: #9aa7b4; background: #1a2029; }
+.tv-act.unknown { color: #aebfd0; background: #1b2533; }

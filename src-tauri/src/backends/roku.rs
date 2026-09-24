@@ -40,6 +40,15 @@ const REMOTE_KEYS: &[&str] = &[
     "Play", "Rev", "Fwd", "ChannelUp", "ChannelDown", "Search",
 ];
 
+/// Roku's own screensaver / ambient apps. The TV reports them as ordinary apps,
+/// but they only run when nobody is watching. (773622 = Backdrops, 123095 = Aquatic Life)
+const SCREENSAVER_APPS: &[&str] = &["773622", "123095"];
+
+fn is_screensaver_app(id: &str, name: &str) -> bool {
+    let n = name.to_lowercase();
+    SCREENSAVER_APPS.contains(&id) || n.contains("screensaver") || n.contains("screen saver") || n == "roku city"
+}
+
 /// Used when the TV won't list its inputs (Limited mode).
 const FALLBACK_INPUTS: &[(&str, &str)] = &[
     ("key:InputTuner", "Live TV"),
@@ -210,11 +219,38 @@ impl RokuActor {
             None
         };
 
+        let power = if is_tv { xml_tag(&info, "power-mode").map(|p| p == "PowerOn") } else { None };
+        // Some apps (ambient video like fireplaces) play without the player
+        // reporting it, so an app with no reported playback is "app", not idle.
+        let activity = if power == Some(false) {
+            "off"
+        } else if active.contains("<screensaver") || active_kind == "ssvr"
+            || (player_state != "play" && is_screensaver_app(&active_id, showing.as_deref().unwrap_or(""))) {
+            "screensaver"
+        } else if active_kind == "home" {
+            "home"
+        } else if active_id == "tvinput.dtv" {
+            "live-tv"
+        } else if active_kind == "tvin" {
+            "input"
+        } else if player_state == "play" {
+            "playing"
+        } else if player_state == "pause" {
+            "paused"
+        } else if player_state == "buffer" || player_state == "startup" {
+            "loading"
+        } else if active_kind == "appl" {
+            "app"
+        } else {
+            ""
+        };
+
         let tv = TvStatus {
             restricted,
             has_power: is_tv,
+            activity: (!activity.is_empty()).then(|| activity.to_string()),
             // PowerOn = screen on. Ready / DisplayOff / Headless / Suspend all mean off.
-            power: if is_tv { xml_tag(&info, "power-mode").map(|p| p == "PowerOn") } else { None },
+            power,
             showing,
             showing_icon: showing_icon.clone(),
             showing_detail,
@@ -224,7 +260,7 @@ impl RokuActor {
             firmware: xml_tag(&info, "software-version").map(|v| format!("Roku OS {v}")),
         };
         if tv != last.tv || self.macs != last.macs {
-            info!(id=%self.id, name=%self.name, power=?tv.power, showing=?tv.showing, detail=?tv.showing_detail,
+            info!(id=%self.id, name=%self.name, power=?tv.power, activity=?tv.activity, showing=?tv.showing, detail=?tv.showing_detail,
                 inputs=tv.inputs.len(), restricted=tv.restricted, headphones=tv.headphones, "roku: status");
             last.tv = tv.clone();
             last.macs = self.macs.clone();
