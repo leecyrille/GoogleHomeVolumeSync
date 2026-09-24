@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Calls an address once in the background (tells the PC a remote button was pressed). -->
+<component name="Ping" extends="Task">
+  <interface>
+    <field id="url" type="string" />
+  </interface>
+  <script type="text/brightscript">
+    <![CDATA[
+    sub init()
+        m.top.functionName = "go"
+    end sub
+    sub go()
+        t = CreateObject("roUrlTransfer")
+        t.SetUrl(m.top.url)
+        t.GetToString()
+    end sub
+    ]]>
+  </script>
+</component>

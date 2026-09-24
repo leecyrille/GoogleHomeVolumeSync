@@ -26,8 +26,10 @@ struct Shared {
     expires: std::time::Instant,
 }
 
+/// A folder of live files (the calendar pictures) plus a "touch" address the TV
+/// calls when a remote button is pressed.
 struct Live {
-    path: PathBuf,
+    dir: PathBuf,
     allowed: Vec<std::net::IpAddr>,
 }
 
@@ -93,8 +95,8 @@ pub async fn share(path: &Path, device_ip: &str) -> Result<String, String> {
     Ok(url)
 }
 
-/// Serve `path` at its lasting address to these TVs only. An empty list stops serving it.
-pub async fn set_live(token: &str, path: &Path, allowed: Vec<std::net::IpAddr>) {
+/// Serve the calendar folder at its lasting address to these TVs only. An empty list stops serving it.
+pub async fn set_live(token: &str, dir: &Path, allowed: Vec<std::net::IpAddr>) {
     if allowed.is_empty() {
         if let Some(s) = SERVER.get() {
             s.live.lock().unwrap().remove(token);
@@ -102,7 +104,7 @@ pub async fn set_live(token: &str, path: &Path, allowed: Vec<std::net::IpAddr>) 
         return;
     }
     let Ok(s) = server().await else { return };
-    s.live.lock().unwrap().insert(token.to_string(), Live { path: path.to_path_buf(), allowed });
+    s.live.lock().unwrap().insert(token.to_string(), Live { dir: dir.to_path_buf(), allowed });
 }
 
 /// The lasting address of a live file, as a TV at `device_ip` reaches it.
@@ -176,9 +178,20 @@ async fn handle(mut sock: TcpStream, peer: std::net::IpAddr) -> std::io::Result<
     let live = target.starts_with("/c/");
     let token = target.strip_prefix("/v/").or_else(|| target.strip_prefix("/c/"))
         .and_then(|r| r.split('/').next()).unwrap_or("");
+    let live_name = target.strip_prefix("/c/").and_then(|r| r.split('/').nth(1)).map(|n| n.split('?').next().unwrap_or(n)).unwrap_or("");
+    if live && live_name == "touch" {
+        let ok = SERVER.get().map(|s| s.live.lock().unwrap().get(token).map(|f| f.allowed.contains(&peer)).unwrap_or(false)).unwrap_or(false);
+        if ok {
+            crate::calendar::touched(peer);
+        }
+        sock.write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await?;
+        return Ok(());
+    }
     let path = SERVER.get().and_then(|s| {
         if live {
-            s.live.lock().unwrap().get(token).filter(|f| f.allowed.contains(&peer)).map(|f| f.path.clone())
+            s.live.lock().unwrap().get(token)
+                .filter(|f| f.allowed.contains(&peer) && crate::cal_render::is_served_name(live_name))
+                .map(|f| f.dir.join(live_name))
         } else {
             s.files.lock().unwrap().get(token)
                 .filter(|f| f.allowed == peer && f.expires > std::time::Instant::now())

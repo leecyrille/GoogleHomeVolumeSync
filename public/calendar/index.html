@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Calendar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="root">
+  <main id="cal">
+    <header id="cal-header">
+      <div id="header-row">
+        <h1 id="month-title">&nbsp;</h1>
+        <div id="legend"></div>
+        <div id="clock"></div>
+      </div>
+      <div id="dow-row"></div>
+    </header>
+    <div id="grid"></div>
+    <footer id="status">
+      <div id="status-left"></div>
+      <div id="status-right"><span id="clock-date"></span></div>
+    </footer>
+  </main>
+  <aside id="tasks">
+    <h2>Tasks</h2>
+    <div id="task-list"></div>
+  </aside>
+  <aside id="photos"></aside>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

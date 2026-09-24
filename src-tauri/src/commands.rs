@@ -101,7 +101,7 @@ pub async fn roku_install_player(core: CoreState<'_>, id: String, password: Stri
 }
 
 /// Make sure a Roku has our player channel, and the newest one.
-async fn ensure_player(core: &Core, id: &str, ip: &str) -> Result<(), String> {
+pub(crate) async fn ensure_player(core: &Core, id: &str, ip: &str) -> Result<(), String> {
     use crate::backends::roku_player as rp;
     if rp::installed_version(ip).await.is_none() {
         return Err("Set up video playback on this TV first (on its card).".into());
@@ -127,32 +127,10 @@ fn display_name(core: &Core, id: &str) -> String {
 pub async fn calendar_show(core: CoreState<'_>, ids: Vec<String>) -> Result<(), String> {
     info!(?ids, "ui: show calendar");
     let core_arc: Arc<Core> = (*core).clone();
-    let token = crate::calendar::ensure_token(&core);
-    let chosen = core.inner.lock().unwrap().cfg.calendar.saver_path.clone();
-    crate::calendar::reset();
-    if crate::calendar::saver(chosen, true).is_none() {
-        return Err(crate::calendar::NO_SAVER.into());
-    }
+    let opts = crate::calendar::manual_opts(&core.inner.lock().unwrap().cfg.calendar);
     let mut errors = Vec::new();
     for id in ids {
-        let (backend, _) = device_backend(&core, &id)?;
-        let result: Result<(), String> = match backend {
-            Backend::Cast => {
-                crate::calendar::start_showing(&id);
-                Ok(())
-            }
-            Backend::Roku => async {
-                let ip = tv_ready(&core, &id).await?;
-                ensure_player(&core, &id, &ip).await?;
-                crate::calendar::start_showing(&id);
-                crate::calendar::step(&core_arc).await; // let this TV fetch the picture
-                let url = crate::calendar::picture_url(&token, &ip).await?;
-                crate::backends::roku_player::show_calendar(&ip, &url, crate::calendar::EVERY_SECS, false).await
-                    .inspect_err(|_| { crate::calendar::stop_showing(&id); })
-            }.await,
-            _ => Err("This device can't show pictures.".into()),
-        };
-        if let Err(e) = result {
+        if let Err(e) = crate::calendar::show_on(&core_arc, &id, opts.clone(), None, false).await {
             errors.push(format!("{}: {e}", display_name(&core, &id)));
         }
     }
@@ -165,12 +143,9 @@ pub async fn calendar_show(core: CoreState<'_>, ids: Vec<String>) -> Result<(), 
 #[tauri::command]
 pub async fn calendar_stop(core: CoreState<'_>, ids: Vec<String>) -> Result<(), String> {
     info!(?ids, "ui: stop calendar");
-    for id in &ids {
-        if crate::calendar::stop_showing(id) {
-            core.send_cmd(id, DeviceCmd::StopCasting);
-        }
-    }
-    crate::calendar::step(&(*core).clone()).await;
+    let core_arc: Arc<Core> = (*core).clone();
+    crate::calendar::stop(&core_arc, &ids);
+    crate::calendar::step(&core_arc).await;
     core.emit_state();
     Ok(())
 }
@@ -180,95 +155,92 @@ pub async fn calendar_stop(core: CoreState<'_>, ids: Vec<String>) -> Result<(), 
 pub async fn calendar_screensaver(core: CoreState<'_>, id: String, on: bool) -> Result<(), String> {
     info!(id=%id, on, "ui: calendar screensaver");
     let core_arc: Arc<Core> = (*core).clone();
-    if !on {
-        {
-            let mut inner = core.inner.lock().unwrap();
-            inner.cfg.calendar.screensaver_tvs.retain(|t| t != &id);
-            inner.cfg.calendar.pushed.remove(&id);
-        }
-        core.save_config();
-        crate::calendar::step(&core_arc).await;
-        core.emit_state();
-        return Ok(());
-    }
-    let token = crate::calendar::ensure_token(&core);
-    let chosen = core.inner.lock().unwrap().cfg.calendar.saver_path.clone();
-    crate::calendar::reset();
-    if crate::calendar::saver(chosen, true).is_none() {
-        return Err(crate::calendar::NO_SAVER.into());
-    }
-    let ip = tv_ready(&core, &id).await?;
-    ensure_player(&core, &id, &ip).await?;
     {
         let mut inner = core.inner.lock().unwrap();
-        if !inner.cfg.calendar.screensaver_tvs.contains(&id) {
-            inner.cfg.calendar.screensaver_tvs.push(id.clone());
+        let c = &mut inner.cfg.calendar;
+        c.screensaver_tvs.retain(|t| t != &id);
+        c.pushed.remove(&id);
+        if on {
+            c.screensaver_tvs.push(id.clone());
         }
-    }
-    crate::calendar::start_showing(&id);
-    crate::calendar::step(&core_arc).await;
-    let url = crate::calendar::picture_url(&token, &ip).await?;
-    let shown = crate::backends::roku_player::show_calendar(&ip, &url, crate::calendar::EVERY_SECS, true).await;
-    {
-        let mut inner = core.inner.lock().unwrap();
-        match &shown {
-            Ok(()) => { inner.cfg.calendar.pushed.insert(id.clone(), url); }
-            Err(_) => inner.cfg.calendar.screensaver_tvs.retain(|t| t != &id),
-        }
-    }
-    if shown.is_err() {
-        crate::calendar::stop_showing(&id);
     }
     core.save_config();
+    let result = if on {
+        let opts = crate::calendar::manual_opts(&core.inner.lock().unwrap().cfg.calendar);
+        let r = crate::calendar::show_on(&core_arc, &id, opts, None, true).await;
+        if r.is_err() {
+            core.inner.lock().unwrap().cfg.calendar.screensaver_tvs.retain(|t| t != &id);
+            core.save_config();
+        }
+        r
+    } else {
+        Ok(())
+    };
     crate::calendar::step(&core_arc).await;
     core.emit_state();
-    shown
+    result
 }
 
-/// Use this Calendar Saver file (None = find it automatically).
+/// Save the calendar settings from the Calendar page.
 #[tauri::command]
-pub async fn calendar_set_saver(core: CoreState<'_>, path: Option<String>) -> Result<(), String> {
-    info!(?path, "ui: calendar saver file");
-    core.inner.lock().unwrap().cfg.calendar.saver_path = path.clone();
+pub async fn calendar_save(core: CoreState<'_>, settings: crate::config::CalendarConfig) -> Result<(), String> {
+    info!("ui: calendar settings");
+    let core_arc: Arc<Core> = (*core).clone();
+    let data_changed = {
+        let mut inner = core.inner.lock().unwrap();
+        let old = inner.cfg.calendar.clone();
+        let mut new = settings;
+        // Kept by the app, not the page.
+        new.token = old.token.clone();
+        new.pushed = old.pushed.clone();
+        new.screensaver_tvs = old.screensaver_tvs.clone();
+        new.saver_imported = old.saver_imported;
+        new.photo_interval_secs = new.photo_interval_secs.clamp(5, 3600);
+        new.refresh_minutes = new.refresh_minutes.clamp(1, 1440);
+        if new.theme != "light" {
+            new.theme = "dark".into();
+        }
+        let changed = serde_json::to_string(&old.feeds).ok() != serde_json::to_string(&new.feeds).ok()
+            || old.photo_folders != new.photo_folders
+            || old.photo_interval_secs != new.photo_interval_secs;
+        inner.cfg.calendar = new;
+        changed
+    };
     core.save_config();
-    crate::calendar::reset();
-    if crate::calendar::saver(path, true).is_none() {
-        core.emit_state();
-        return Err(crate::calendar::NO_SAVER.into());
-    }
-    crate::calendar::step(&(*core).clone()).await;
+    crate::cal_render::kick(data_changed);
+    crate::calendar::step(&core_arc).await;
     core.emit_state();
     Ok(())
 }
 
-/// Dark or light calendar on the TV.
+/// Copy calendars and photo folders from the PactoTech Calendar Saver.
 #[tauri::command]
-pub async fn calendar_set_theme(core: CoreState<'_>, theme: String) -> Result<(), String> {
-    info!(theme=%theme, "ui: calendar theme");
-    if theme != "dark" && theme != "light" {
-        return Err("Unknown theme.".into());
-    }
-    core.inner.lock().unwrap().cfg.calendar.theme = theme;
-    core.save_config();
-    crate::calendar::restart();
-    crate::calendar::step(&(*core).clone()).await;
+pub async fn calendar_import_saver(core: CoreState<'_>) -> Result<String, String> {
+    let msg = crate::calendar::import_saver(&core)?;
     core.emit_state();
-    Ok(())
+    Ok(msg)
 }
 
-/// Open the latest calendar picture.
+/// Check a calendar address before adding it.
 #[tauri::command]
-pub fn calendar_preview(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn calendar_test_feed(url: String) -> Result<String, String> {
+    crate::cal_feeds::test_feed(&url).await
+}
+
+/// Open the latest picture of a view.
+#[tauri::command]
+pub fn calendar_preview(app: tauri::AppHandle, theme: String, view: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let path = crate::calendar::image_path();
-    if !path.is_file() {
+    let name = crate::cal_render::file_name(&theme, &view, "jpg");
+    let path = crate::cal_render::dir().join(&name);
+    if !crate::cal_render::is_served_name(&name) || !path.is_file() {
         return Err("There's no picture yet. Show the calendar on a TV first.".into());
     }
     app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
 /// The TV's address, turning it on first if it's off.
-async fn tv_ready(core: &Core, id: &str) -> Result<String, String> {
+pub(crate) async fn tv_ready(core: &Core, id: &str) -> Result<String, String> {
     let (ip, off) = {
         let inner = core.inner.lock().unwrap();
         let e = inner.devices.get(id).ok_or("Unknown device.")?;
@@ -463,6 +435,64 @@ pub fn stop_sync(core: CoreState) {
     info!("ui: stop sync");
     core.inner.lock().unwrap().sync = None;
     core.emit_state();
+}
+
+/// Every playable file in a folder and its subfolders, in natural order (2 before 10).
+#[tauri::command]
+pub fn list_media_files(folder: String, extensions: Vec<String>) -> Result<Vec<String>, String> {
+    let exts: Vec<String> = extensions.iter().map(|e| e.to_ascii_lowercase()).collect();
+    let mut out: Vec<std::path::PathBuf> = Vec::new();
+    let mut stack = vec![std::path::PathBuf::from(&folder)];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for e in entries.flatten() {
+            if e.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().and_then(|x| x.to_str()).map(|x| exts.contains(&x.to_ascii_lowercase())).unwrap_or(false) {
+                out.push(p);
+            }
+        }
+        if out.len() > 5000 {
+            return Err("That folder has too many files. Pick a smaller one.".into());
+        }
+    }
+    out.sort_by(|a, b| natural_cmp(&a.to_string_lossy().to_lowercase(), &b.to_string_lossy().to_lowercase()));
+    info!(folder=%folder, count = out.len(), "ui: listed folder for the play queue");
+    Ok(out.into_iter().map(|p| p.to_string_lossy().to_string()).collect())
+}
+
+/// Compare with runs of digits as numbers ("track 2" before "track 10").
+fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    let (mut x, mut y) = (a.chars().peekable(), b.chars().peekable());
+    loop {
+        match (x.peek().copied(), y.peek().copied()) {
+            (None, None) => return std::cmp::Ordering::Equal,
+            (None, _) => return std::cmp::Ordering::Less,
+            (_, None) => return std::cmp::Ordering::Greater,
+            (Some(c), Some(d)) if c.is_ascii_digit() && d.is_ascii_digit() => {
+                let mut n1 = String::new();
+                while let Some(c) = x.peek().copied().filter(|c| c.is_ascii_digit()) { n1.push(c); x.next(); }
+                let mut n2 = String::new();
+                while let Some(d) = y.peek().copied().filter(|d| d.is_ascii_digit()) { n2.push(d); y.next(); }
+                let (t1, t2) = (n1.trim_start_matches('0'), n2.trim_start_matches('0'));
+                let ord = t1.len().cmp(&t2.len()).then(t1.cmp(t2));
+                if ord != std::cmp::Ordering::Equal {
+                    return ord;
+                }
+            }
+            (Some(c), Some(d)) => {
+                if c != d {
+                    return c.cmp(&d);
+                }
+                x.next();
+                y.next();
+            }
+        }
+    }
 }
 
 /// Play a video link (MP4, MKV, TS or an M3U8 live stream) straight from the internet.

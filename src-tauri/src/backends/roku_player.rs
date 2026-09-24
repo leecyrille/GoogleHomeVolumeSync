@@ -17,6 +17,7 @@ const SCENE_BRS: &str = include_str!("../../../roku-player/components/PlayerScen
 const CAL_XML: &str = include_str!("../../../roku-player/components/CalendarView.xml");
 const CAL_BRS: &str = include_str!("../../../roku-player/components/CalendarView.brs");
 const SAVER_XML: &str = include_str!("../../../roku-player/components/CalendarSaverScene.xml");
+const PING_XML: &str = include_str!("../../../roku-player/components/Ping.xml");
 const ICON: &[u8] = include_bytes!("../../../roku-player/images/icon.png");
 
 /// Home x3, Up x2, Right, Left, Right, Left, Right opens Roku's developer settings.
@@ -54,6 +55,7 @@ fn build_zip() -> Result<Vec<u8>, String> {
             ("components/CalendarView.xml", CAL_XML.as_bytes()),
             ("components/CalendarView.brs", CAL_BRS.as_bytes()),
             ("components/CalendarSaverScene.xml", SAVER_XML.as_bytes()),
+            ("components/Ping.xml", PING_XML.as_bytes()),
             ("images/icon.png", ICON),
         ] {
             zip.start_file(name, opts).map_err(|e| e.to_string())?;
@@ -190,7 +192,7 @@ fn format_for_ext(ext: &str) -> Option<&'static str> {
     }
 }
 
-fn q(s: &str) -> String {
+pub fn q(s: &str) -> String {
     s.bytes().map(|b| match b {
         b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
         _ => format!("%{b:02X}"),
@@ -229,13 +231,13 @@ pub async fn play(ip: &str, items: &[Item]) -> Result<(), String> {
     }
 }
 
-/// Show a picture that refreshes every `every` seconds (the calendar). With `save`,
-/// the TV also keeps the address for its screensaver.
-pub async fn show_calendar(ip: &str, url: &str, every: u64, save: bool) -> Result<(), String> {
+/// Show the calendar (`params` from calendar::roku_params). With `save`, the TV
+/// also keeps these settings for its screensaver.
+pub async fn show_calendar(ip: &str, params: &str, save: bool) -> Result<(), String> {
     let c = client();
     let active = c.get(format!("http://{ip}:8060/query/active-app")).send().await
         .map_err(|e| e.to_string())?.text().await.unwrap_or_default();
-    let params = format!("cal={}&every={every}{}", q(url), if save { "&save=1" } else { "" });
+    let params = format!("{params}{}", if save { "&save=1" } else { "" });
     let endpoint = if active.contains(r#"id="dev""#) {
         format!("http://{ip}:8060/input?{params}")
     } else {

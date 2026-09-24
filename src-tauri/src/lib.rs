@@ -5,6 +5,9 @@ mod config;
 mod core;
 mod media_server;
 mod calendar;
+mod cal_feeds;
+mod cal_render;
+mod cal_video;
 mod sync_play;
 mod tray;
 mod types;
@@ -75,13 +78,18 @@ pub fn run() {
             commands::get_log_tail,
             commands::open_log_folder,
             commands::open_notices,
+            commands::list_media_files,
             commands::calendar_show,
             commands::calendar_stop,
             commands::calendar_screensaver,
-            commands::calendar_set_saver,
             commands::calendar_preview,
-            commands::calendar_set_theme,
+            commands::calendar_save,
+            commands::calendar_import_saver,
+            commands::calendar_test_feed,
         ])
+        .register_asynchronous_uri_scheme_protocol("calphoto", |ctx, request, responder| {
+            cal_render::protocol(ctx.app_handle(), request, responder)
+        })
         .setup(|app| {
             let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<types::CoreEvent>(256);
             let (lg_key_tx, mut lg_key_rx) = tokio::sync::mpsc::channel::<(String, String)>(8);
@@ -134,8 +142,9 @@ pub fn run() {
             // Persist Roku cached levels whenever a roku volume event lands:
             // handled via config save cadence above (levels live in actor + events).
 
-            // The calendar on TVs: renderer, picture link, Google screens.
+            // The calendar on TVs: who shows it, and the pictures themselves.
             tauri::async_runtime::spawn(calendar::run(core.clone()));
+            tauri::async_runtime::spawn(cal_render::run(app.handle().clone(), core.clone()));
 
             // Reconnect actors for devices we knew about (cast devices before mdns finds them again).
             core.respawn_known_cast_devices();

@@ -1,6 +1,7 @@
 ' Volume Sync Player: plays videos handed over by the Volume Sync app.
 ' Launch:  POST /launch/dev?n=<count>&u1=<url>&t1=<title>&f1=<mp4|mkv|hls|ts>&s1=<subtitle url>&u2=...
-'          POST /launch/dev?cal=<picture url>&every=<seconds>[&save=1]   (calendar; save=1 also keeps it for the screensaver)
+'          POST /launch/dev?cal=<base address>&theme=<dark|light>&views=<month,week,day>&rotate=<s>&q=<hd|4k>[&save=1]
+'            (the calendar; save=1 also keeps these settings for the screensaver)
 ' Running: POST /input?n=...   /input?cal=...   /input?seek=<ms>   /input?control=<play|pause|resume|stop>
 sub Main(args as Dynamic)
     screen = CreateObject("roSGScreen")
@@ -25,14 +26,19 @@ sub Main(args as Dynamic)
     end while
 end sub
 
-' Remember the calendar's address for the screensaver (registry lives on this thread).
+' The calendar settings the screensaver uses (registry lives on this thread).
+function calendarKeys() as Object
+    return ["cal", "theme", "views", "rotate", "q"]
+end function
+
 sub saveCalendar(args as Dynamic)
     if args = invalid or args.cal = invalid or args.save <> "1" then return
     sec = CreateObject("roRegistrySection", "calendar")
-    sec.Write("url", args.cal)
-    every = "60"
-    if args.every <> invalid then every = args.every
-    sec.Write("every", every)
+    for each k in calendarKeys()
+        v = ""
+        if args[k] <> invalid then v = args[k]
+        sec.Write(k, v)
+    end for
     sec.Flush()
 end sub
 
@@ -44,9 +50,12 @@ sub RunScreenSaver()
     scene = screen.CreateScene("CalendarSaverScene")
     screen.show()
     sec = CreateObject("roRegistrySection", "calendar")
-    if sec.Exists("url") and sec.Read("url") <> ""
-        scene.every = Int(Val(sec.Read("every")))
-        scene.url = sec.Read("url")
+    if sec.Exists("cal") and sec.Read("cal") <> ""
+        a = {}
+        for each k in calendarKeys()
+            if sec.Exists(k) then a[k] = sec.Read(k)
+        end for
+        scene.args = a
     else
         scene.message = "Turn on the calendar screensaver in the Volume Sync app on your PC."
     end if

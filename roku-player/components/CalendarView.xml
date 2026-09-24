@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- Full-screen picture from the PC, re-fetched every few seconds; a new one only
-     replaces the old once it has loaded, so the screen never goes blank. -->
+<!-- The calendar from the PC, full screen. `args` (from the launch or the screensaver
+     settings): cal = base address, theme, views = "month,week", rotate = seconds between
+     views, q = "hd" or "4k". Pictures only replace each other once loaded, so the screen
+     never goes blank; in 4K the picture comes as a video (sharper), covered by the 1080p
+     picture while it reloads. Up / Down switch between month, week and day. -->
 <component name="CalendarView" extends="Group">
   <interface>
-    <field id="url" type="string" onChange="onUrl" />
-    <field id="every" type="integer" value="60" />
+    <field id="args" type="assocarray" onChange="onArgs" />
     <field id="note" type="string" onChange="onNote" />
     <field id="message" type="string" onChange="onMessage" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/CalendarView.brs" />
   <children>
+    <Video id="vid" width="1920" height="1080" visible="false" enableUI="false" loop="true" />
     <Rectangle id="bg" width="1920" height="1080" color="0x0D1117FF" />
     <Label id="waiting" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true"
       color="0x9AA4B2FF" text="Waiting for the calendar from your PC…" />
@@ -19,7 +22,8 @@
     <Label id="stale" translation="[40,1030]" width="1840" height="50" vertAlign="center" color="0xE0AF68FF" visible="false" />
     <Rectangle id="noteBg" translation="[0,930]" width="1920" height="150" color="0x000000D8" visible="false" />
     <Label id="noteText" translation="[80,930]" width="1760" height="150" horizAlign="center" vertAlign="center" wrap="true" visible="false" />
-    <Timer id="refresh" repeat="true" duration="5" />
+    <Timer id="refresh" repeat="false" duration="5" />
+    <Timer id="rotateTimer" repeat="true" duration="60" />
     <Timer id="noteTimer" repeat="false" duration="20" />
   </children>
 </component>

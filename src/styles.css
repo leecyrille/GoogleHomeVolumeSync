@@ -399,3 +399,55 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .cal-theme button + button { border-left: 1px solid var(--border); }
 .cal-theme button.on { background: var(--accent); color: #fff; }
 .btn.cal-active { border-color: var(--ok); color: var(--ok); }
+
+/* ---- calendar page ---- */
+.cal-status { font-size: 12.5px; color: var(--text-dim); margin: -6px 0 14px; }
+.cal-status .warn { color: #e0af68; }
+.cal-sec { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.cal-sec h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; color: var(--text-dim); margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+.cal-sec .hint { margin-top: 8px; }
+.cal-look { display: grid; grid-template-columns: 90px 1fr; gap: 10px 12px; align-items: center; }
+.lbl { font-size: 12.5px; color: var(--text-dim); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { background: transparent; border: none; color: var(--text-dim); font-size: 13px; padding: 6px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent); color: #fff; }
+.view-checks { display: inline-flex; gap: 12px; }
+.cal-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.cal-previews figure { margin: 0; cursor: zoom-in; }
+.cal-previews img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; background: #000; }
+.cal-previews figure.missing img { visibility: hidden; }
+.cal-previews figcaption { font-size: 12px; color: var(--text-dim); margin-top: 4px; text-align: center; }
+.cal-sched { margin: 10px 0 0; }
+.cal-sched-grid { display: grid; grid-template-columns: 70px 1fr; gap: 10px 12px; align-items: start; margin-top: 12px; }
+.cal-devs, .cal-opts { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.cal-opts { flex-direction: column; }
+.cal-opts select { margin-left: 4px; }
+.feed-row { display: grid; grid-template-columns: auto auto 170px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.feed-row:last-child { border-bottom: none; }
+.feed-row input[type="color"] { width: 30px; height: 26px; padding: 0; border: none; background: none; }
+.feed-row .feed-url { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.feed-problem, .feed-test { grid-column: 3 / -1; font-size: 12px; color: #e0af68; }
+.feed-test:empty { display: none; }
+.folder-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 13px; }
+.folder-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- play queue ---- */
+.queue-dialog { width: min(640px, 92vw); max-width: none; }
+.queue-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.queue-tools .grow { flex: 1; }
+.queue-list { list-style: none; margin: 0 0 8px; padding: 0; max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.queue-list:empty { display: none; }
+.queue-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg-card); cursor: grab; font-size: 13px; }
+.queue-list li:last-child { border-bottom: none; }
+.queue-list li.dragging { opacity: .4; }
+.queue-list li.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.queue-list li.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.queue-list .grip { color: var(--text-dim); letter-spacing: -2px; }
+.queue-list .qn { width: 22px; text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.queue-list .qname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-queue { margin: 6px 0 2px 19px; font-size: 12.5px; }
+.dev-queue summary { cursor: pointer; color: var(--text-dim); }
+.dev-queue ol { margin: 6px 0; padding-left: 22px; max-height: 180px; overflow: auto; }
+.dev-queue li.cur { color: var(--ok); font-weight: 600; }
+.dev-queue li.past { color: var(--text-dim); opacity: .7; }

@@ -61,29 +61,95 @@ pub struct AppConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CalendarConfig {
-    /// The Calendar Saver file; found automatically when unset.
-    #[serde(default)]
-    pub saver_path: Option<String>,
-    /// Secret part of the picture's address, kept so screensavers keep working.
+    /// Secret part of the pictures' address, kept so screensavers keep working.
     #[serde(default)]
     pub token: String,
     /// Roku TVs using the calendar as their screensaver.
     #[serde(default)]
     pub screensaver_tvs: Vec<String>,
-    /// The address each of those TVs saved: device id -> URL.
+    /// The settings each of those TVs saved: device id -> launch parameters.
     #[serde(default)]
     pub pushed: HashMap<String, String>,
-    /// "dark" or "light" on the TV.
+    /// "dark" or "light", unless a schedule says otherwise.
     #[serde(default = "default_dark")]
     pub theme: String,
+    /// Views when shown by hand: "month", "week", "day".
+    #[serde(default = "default_views")]
+    pub views: Vec<String>,
+    /// Seconds between views (0 = stay on the first).
+    #[serde(default)]
+    pub rotate_secs: u32,
+    /// Sharp 4K on Roku TVs (sent as a one-frame video).
+    #[serde(default)]
+    pub four_k: bool,
+    #[serde(default)]
+    pub feeds: Vec<crate::cal_feeds::FeedCfg>,
+    #[serde(default)]
+    pub photo_folders: Vec<String>,
+    #[serde(default = "default_photo_secs")]
+    pub photo_interval_secs: u32,
+    #[serde(default = "default_refresh")]
+    pub refresh_minutes: u32,
+    #[serde(default)]
+    pub schedules: Vec<CalSchedule>,
+    /// The PactoTech Calendar Saver's settings were copied once already.
+    #[serde(default)]
+    pub saver_imported: bool,
 }
 fn default_dark() -> String {
     "dark".into()
 }
+fn default_views() -> Vec<String> {
+    vec!["month".into()]
+}
+fn default_photo_secs() -> u32 {
+    20
+}
+fn default_refresh() -> u32 {
+    15
+}
 impl Default for CalendarConfig {
     fn default() -> Self {
-        CalendarConfig { saver_path: None, token: String::new(), screensaver_tvs: Vec::new(), pushed: HashMap::new(), theme: default_dark() }
+        CalendarConfig {
+            token: String::new(), screensaver_tvs: Vec::new(), pushed: HashMap::new(), theme: default_dark(),
+            views: default_views(), rotate_secs: 0, four_k: false, feeds: Vec::new(), photo_folders: Vec::new(),
+            photo_interval_secs: default_photo_secs(), refresh_minutes: default_refresh(), schedules: Vec::new(), saver_imported: false,
+        }
     }
+}
+
+/// Show the calendar on some screens at a set time.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CalSchedule {
+    pub id: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Mon..Sun
+    pub days: [bool; 7],
+    /// "HH:MM" local
+    pub start: String,
+    pub duration_min: u32,
+    #[serde(default)]
+    pub devices: Vec<String>,
+    /// "light", "dark" or "default"
+    #[serde(default)]
+    pub theme: String,
+    #[serde(default = "default_views")]
+    pub views: Vec<String>,
+    #[serde(default)]
+    pub rotate_secs: u32,
+    /// Turn a TV on if it's off.
+    #[serde(default = "default_true")]
+    pub power_on: bool,
+    /// Leave a TV alone while it's playing something (screensavers and the home screen are fine).
+    #[serde(default = "default_true")]
+    pub dont_interrupt: bool,
+    /// When the time is up, turn the TV off (if it's still showing the calendar).
+    #[serde(default = "default_true")]
+    pub off_after: bool,
+    /// Turn it off early after this many minutes without a button press (0 = never).
+    #[serde(default)]
+    pub idle_off_min: u32,
 }
 
 pub fn config_dir() -> PathBuf {

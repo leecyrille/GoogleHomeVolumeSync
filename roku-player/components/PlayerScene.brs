@@ -193,15 +193,14 @@ sub showCalendar(args as Object)
     m.video.control = "stop"
     m.video.visible = false
     m.hint.visible = false
-    if args.every <> invalid then m.cal.every = Int(Val(args.every))
     m.cal.visible = true
-    m.cal.url = args.cal
+    m.cal.args = args
     if args.save = "1" then m.cal.note = "Saved as a screensaver. To use it: Home, then Settings › Theme › Screensaver › Calendar (Volume Sync)."
-    m.top.setFocus(true)
+    m.cal.setFocus(true)
 end sub
 
 sub hideCalendar()
-    m.cal.url = ""
+    m.cal.args = {}
     m.cal.visible = false
 end sub
 

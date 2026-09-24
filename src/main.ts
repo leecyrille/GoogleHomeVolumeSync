@@ -72,9 +72,20 @@ interface ScheduleTarget { target_id: string; is_group: boolean; volume_pct: num
 interface Sched { id: string; enabled: boolean; days: boolean[]; time: string; targets: ScheduleTarget[]; }
 interface Settings { start_with_windows: boolean; auto_update: boolean; }
 interface SyncView { members: string[]; paused: boolean; spread_ms?: number | null; status: string; }
+interface CalFeed { url: string; name: string; color: string; enabled: boolean; }
+interface CalSchedule {
+  id: string; enabled: boolean; days: boolean[]; start: string; duration_min: number; devices: string[];
+  theme: string; views: string[]; rotate_secs: number; power_on: boolean; dont_interrupt: boolean; off_after: boolean; idle_off_min: number;
+}
+interface CalSettings {
+  token: string; screensaver_tvs: string[]; pushed: Record<string, string>; theme: string; views: string[]; rotate_secs: number;
+  four_k: boolean; feeds: CalFeed[]; photo_folders: string[]; photo_interval_secs: number; refresh_minutes: number;
+  schedules: CalSchedule[]; saver_imported: boolean;
+}
+interface FeedStatus { name: string; color: string; stale: boolean; error?: string | null; enabled: boolean; }
 interface CalendarView {
-  saver?: string | null; rendering: boolean; updated?: number | null; error?: string | null;
-  showing: string[]; screensaver_tvs: string[]; outdated: string[]; theme?: string;
+  rendering: boolean; updated?: number | null; error?: string | null; feeds: FeedStatus[]; events: number; photos: number;
+  showing: string[]; screensaver_tvs: string[]; outdated: string[]; settings: CalSettings; saver_found: boolean;
 }
 interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; }
 
@@ -284,23 +295,160 @@ function playableKinds(d: Device): [string[], string[], string[]] {
   return [CAST_VIDEO, CAST_AUDIO, canShowPictures(d) ? CAST_PICTURES : []];
 }
 
-/** Pick any mix of files the device supports and play them there. */
-async function chooseAndPlay(d: Device) {
-  const [video, audio, pictures] = playableKinds(d);
-  const all = [...video, ...audio, ...pictures];
-  const filters = [
-    { name: "Everything this device can play", extensions: all },
-    { name: "Videos", extensions: video },
-    { name: "Music", extensions: audio },
-    ...(pictures.length ? [{ name: "Pictures", extensions: pictures }] : []),
-  ];
-  const picked = await open({ multiple: true, filters });
-  const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
-  if (paths.length === 0) return;
-  try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
+// ---------------- play queue ----------------
+
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+const extOf = (p: string) => (p.split(".").pop() ?? "").toLowerCase();
+
+/** What was last sent to each device, so its card can show the queue. */
+const deviceQueues = new Map<string, string[]>();
+const openQueues = new Set<string>();
+
+/**
+ * Pick files and folders, put them in order (drag to reorder), then resolve with the list,
+ * or null if cancelled. `exts` limits what can be added.
+ */
+function queueBuilder(title: string, exts: string[], initial: string[] = []): Promise<string[] | null> {
+  return new Promise((resolve) => {
+    let items = [...initial];
+    const wrap = document.createElement("div");
+    wrap.className = "dialog-back";
+    const done = (r: string[] | null) => { wrap.remove(); resolve(r); };
+    const draw = () => {
+      wrap.innerHTML = `
+        <div class="dialog queue-dialog" role="dialog" aria-modal="true">
+          <h3>${esc(title)}</h3>
+          <div class="queue-tools">
+            <button class="btn" data-q="files">+ Add files…</button>
+            <button class="btn" data-q="folder">+ Add a folder…</button>
+            <span class="grow"></span>
+            <button class="btn mini" data-q="sort" ${items.length > 1 ? "" : "disabled"}>Sort A–Z</button>
+            <button class="btn mini" data-q="shuffle" ${items.length > 1 ? "" : "disabled"}>Shuffle</button>
+            <button class="btn mini" data-q="clear" ${items.length ? "" : "disabled"}>Clear</button>
+          </div>
+          <ol class="queue-list">${items.map((p, i) => `
+            <li draggable="true" data-i="${i}" title="${esc(p)}">
+              <span class="grip" aria-hidden="true">⋮⋮</span>
+              <span class="qn">${i + 1}</span>
+              <span class="qname">${esc(baseName(p))}</span>
+              <button class="btn icon" data-qdel="${i}" title="Remove">✕</button>
+            </li>`).join("")}
+          </ol>
+          ${items.length ? `<div class="hint-inline">Drag to change the order. ${items.length} item${items.length === 1 ? "" : "s"}.</div>` : `<div class="hint">Add files, or a whole folder (with its subfolders), then drag them into the order you want.</div>`}
+          <div class="dialog-actions">
+            <button class="btn" data-q="cancel">Cancel</button>
+            <button class="btn primary" data-q="play" ${items.length ? "" : "disabled"}>▶ Play ${items.length > 1 ? `${items.length} in order` : ""}</button>
+          </div>
+        </div>`;
+      wireList();
+    };
+    const add = (paths: string[]) => {
+      for (const p of paths) if (!items.includes(p) && exts.includes(extOf(p))) items.push(p);
+      draw();
+    };
+    const wireList = () => {
+      const list = wrap.querySelector<HTMLOListElement>(".queue-list")!;
+      let from = -1;
+      list.querySelectorAll<HTMLLIElement>("li").forEach((li) => {
+        li.addEventListener("dragstart", (e) => { from = Number(li.dataset.i); li.classList.add("dragging"); e.dataTransfer?.setData("text/plain", String(from)); });
+        li.addEventListener("dragend", () => li.classList.remove("dragging"));
+        li.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          const r = li.getBoundingClientRect();
+          const after = e.clientY > r.top + r.height / 2;
+          list.querySelectorAll("li").forEach((x) => x.classList.remove("drop-before", "drop-after"));
+          li.classList.add(after ? "drop-after" : "drop-before");
+        });
+        li.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const r = li.getBoundingClientRect();
+          let to = Number(li.dataset.i) + (e.clientY > r.top + r.height / 2 ? 1 : 0);
+          if (from < 0 || to === from || to === from + 1) { draw(); return; }
+          const [moved] = items.splice(from, 1);
+          if (to > from) to--;
+          items.splice(to, 0, moved);
+          draw();
+        });
+      });
+    };
+    wrap.addEventListener("click", async (e) => {
+      const t = e.target as HTMLElement;
+      const del = t.closest<HTMLElement>("[data-qdel]");
+      if (del) { items.splice(Number(del.dataset.qdel), 1); draw(); return; }
+      const act = t.closest<HTMLElement>("[data-q]")?.dataset.q;
+      if (!act) { if (t === wrap) done(null); return; }
+      if (act === "cancel") return done(null);
+      if (act === "play") return done(items);
+      if (act === "clear") { items = []; draw(); }
+      if (act === "sort") { items.sort((a, b) => baseName(a).localeCompare(baseName(b), undefined, { numeric: true, sensitivity: "base" })); draw(); }
+      if (act === "shuffle") { items = shuffleArr(items); draw(); }
+      if (act === "files") {
+        const picked = await open({ multiple: true, filters: [{ name: "Playable files", extensions: exts }] });
+        add(Array.isArray(picked) ? picked : picked ? [picked] : []);
+      }
+      if (act === "folder") {
+        const folder = await open({ directory: true, multiple: false });
+        if (typeof folder !== "string") return;
+        try { add(await invoke<string[]>("list_media_files", { folder, extensions: exts })); }
+        catch (err) { alert(String(err)); }
+      }
+    });
+    document.body.appendChild(wrap);
+    draw();
+  });
 }
 
-type CastMode = "" | "video" | "audio" | "calendar";
+function shuffleArr<T>(a: T[]): T[] {
+  const r = [...a];
+  for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
+  return r;
+}
+
+/** Play an ordered list on one device and remember it for the card's queue. */
+async function playQueue(id: string, paths: string[]) {
+  try {
+    await invoke("play_files", { id, paths });
+    deviceQueues.set(id, paths);
+    render();
+  } catch (e) { alert(String(e)); }
+}
+
+/** The queue last sent to a device, with the playing item marked (matched by title). */
+function queueView(d: Device): string {
+  const q = deviceQueues.get(d.id);
+  if (!q || q.length < 2) return "";
+  const title = d.media?.title ?? "";
+  const cur = q.findIndex((p) => baseName(p).replace(/\.[^.]+$/, "") === title);
+  return `
+    <details class="dev-queue" ${openQueues.has(d.id) ? "open" : ""}>
+      <summary>Queue · ${cur >= 0 ? `${cur + 1} of ${q.length}` : `${q.length} items`}</summary>
+      <ol>${q.map((p, i) => `<li class="${i === cur ? "cur" : i < cur ? "past" : ""}">${esc(baseName(p))}</li>`).join("")}</ol>
+      <button class="btn mini" data-act="queue-edit">Change order…</button>
+    </details>`;
+}
+
+/** Pick files or a folder for the device, put them in order, and play them. */
+async function chooseAndPlay(d: Device) {
+  const [video, audio, pictures] = playableKinds(d);
+  const paths = await queueBuilder(`Play on ${displayName(d)}`, [...video, ...audio, ...pictures]);
+  if (paths?.length) await playQueue(d.id, paths);
+}
+
+/** Reorder what's playing: keep going from the current item, where it was. */
+async function editQueue(d: Device) {
+  const q = deviceQueues.get(d.id);
+  if (!q) return;
+  const [video, audio, pictures] = playableKinds(d);
+  const title = d.media?.title ?? "";
+  const cur = Math.max(0, q.findIndex((p) => baseName(p).replace(/\.[^.]+$/, "") === title));
+  const paths = await queueBuilder(`Up next on ${displayName(d)}`, [...video, ...audio, ...pictures], q.slice(cur));
+  if (!paths?.length) return;
+  const resumeAt = paths[0] === q[cur] && d.media ? mediaPos(d.media) : 0;
+  await playQueue(d.id, paths);
+  if (resumeAt > 5000) setTimeout(() => invoke("seek", { id: d.id, positionMs: Math.round(resumeAt) }), 3500);
+}
+
+type CastMode = "" | "video" | "audio";
 
 /** A column of devices in the cast panel. */
 interface CastKind { key: string; title: string; match: (d: Device) => boolean; }
@@ -368,7 +516,6 @@ function castConflicts(picked: Device[]): { lines: string[]; remove: string[] } 
 }
 
 function castPanel(): string {
-  if (castMode === "calendar") return calendarPanel();
   const kinds = castKinds(castMode);
   const eligible = castEligible(castMode);
   const picked = castPickedDevices();
@@ -475,21 +622,18 @@ async function castPlay(link: boolean) {
   }
   const [video, audio, pictures] = commonKinds(picked);
   const single = picked.length === 1;
+  const where = single ? displayName(picked[0]) : `${picked.length} devices`;
   if (castMode === "audio") {
-    const chosen = await open({ multiple: single, filters: [{ name: "Music", extensions: audio }] });
-    const paths = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
-    if (paths.length === 0) return;
-    if (single) return void each("play_files", (id) => ({ id, paths }));
+    const paths = await queueBuilder(`Play music on ${where}`, audio);
+    if (!paths?.length) return;
+    if (single) return void playQueue(ids[0], paths);
+    if (paths.length > 1) { alert("To play in sync on several devices, choose one song or recording."); return; }
     try { await invoke("play_synced", { ids, path: paths[0] }); } catch (e) { alert(String(e)); }
     return;
   }
-  const chosen = await open({ multiple: true, filters: [
-    { name: "Videos and pictures", extensions: [...video, ...pictures] },
-    { name: "Videos", extensions: video },
-    ...(pictures.length ? [{ name: "Pictures", extensions: pictures }] : []),
-  ] });
-  const paths = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
-  if (paths.length === 0) return;
+  const paths = await queueBuilder(`Play on ${where}`, [...video, ...pictures]);
+  if (!paths?.length) return;
+  if (single) return void playQueue(ids[0], paths);
   const isPicture = (p: string) => pictures.includes(p.split(".").pop()!.toLowerCase());
   if (single || paths.every(isPicture)) return void each("play_files", (id) => ({ id, paths }));
   if (paths.length > 1) { alert("To play on several screens in sync, choose one video. (Several pictures together make a slideshow.)"); return; }
@@ -498,67 +642,24 @@ async function castPlay(link: boolean) {
 
 // ---------------- calendar on TVs ----------------
 
-const CALENDAR_SITE = "https://calendarsaver.com/";
 const calBusy = new Set<string>();
+const VIEW_NAMES: Record<string, string> = { month: "Month", week: "Week", day: "Day" };
+const ROTATE_CHOICES: [number, string][] = [[0, "Don't switch"], [15, "15 seconds"], [30, "30 seconds"], [60, "1 minute"], [120, "2 minutes"], [300, "5 minutes"], [600, "10 minutes"]];
+const DURATIONS: [number, string][] = [[15, "15 min"], [30, "30 min"], [45, "45 min"], [60, "1 hour"], [90, "1½ hours"], [120, "2 hours"], [180, "3 hours"], [240, "4 hours"], [360, "6 hours"], [480, "8 hours"], [720, "12 hours"]];
+const IDLE_CHOICES = [10, 15, 20, 30, 45, 60, 90];
+const PHOTO_SECS: [number, string][] = [[5, "5 seconds"], [10, "10 seconds"], [20, "20 seconds"], [30, "30 seconds"], [60, "1 minute"], [300, "5 minutes"]];
 
 /** Screens that can show the calendar picture. */
-function calendarScreens(): Device[] {
-  return state.devices.filter((d) => d.online && (d.backend === "roku" || (d.backend === "cast" && !d.is_cast_group && canShowPictures(d))));
+function calendarScreens(includeOffline = false): Device[] {
+  return state.devices.filter((d) => (includeOffline || d.online) && (d.backend === "roku" || (d.backend === "cast" && !d.is_cast_group && canShowPictures(d))));
 }
 
-function calendarPanel(): string {
-  const cal: CalendarView = state.calendar ?? { rendering: false, showing: [], screensaver_tvs: [], outdated: [] };
-  const theme = cal.theme === "light" ? "light" : "dark";
-  const themePick = `
-      <div class="cal-theme" role="group" aria-label="Calendar theme">
-        <button class="${theme === "dark" ? "on" : ""}" data-cal-theme="dark">Dark</button><button class="${theme === "light" ? "on" : ""}" data-cal-theme="light">Light</button>
-      </div>`;
-  const screens = calendarScreens();
-  const fileName = (p: string) => p.split(/[\\/]/).pop() ?? p;
-  const when = cal.updated ? new Date(cal.updated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-  const source = cal.saver
-    ? `<div class="cal-source">Drawn on this PC by <b title="${esc(cal.saver)}">${esc(fileName(cal.saver))}</b>
-         <button class="linkish" id="cal-locate">Change…</button>
-         ${cal.updated ? `<span class="cal-dot">·</span> latest picture ${esc(when)} <button class="linkish" id="cal-preview">Preview</button>` : ""}</div>`
-    : `<div class="cast-warn"><b>Couldn't find the PactoTech Calendar Saver on this PC.</b>
-         <div class="cast-warn-actions" style="margin-top:6px">
-           <button class="btn mini" id="cal-locate">Locate it…</button>
-           <button class="btn mini" id="cal-get">Get it</button>
-           <span class="hint-inline">The free calendar screensaver this shows on your TVs.</span>
-         </div></div>`;
-  const row = (d: Device) => {
-    const showing = cal.showing.includes(d.id);
-    const blocked = castBlocked(d);
-    const busy = calBusy.has(d.id);
-    const saver = d.backend === "roku" ? `
-        <label class="chk" title="Keep the calendar on this TV as its Roku screensaver">
-          <input type="checkbox" data-cal-ss="${esc(d.id)}" ${cal.screensaver_tvs.includes(d.id) ? "checked" : ""} ${blocked || busy ? "disabled" : ""}> Screensaver</label>
-        ${cal.outdated.includes(d.id) ? `<button class="btn mini" data-cal-update="${esc(d.id)}" title="This PC's network address changed since the TV saved it">Update TV</button>` : ""}` : "";
-    return `
-      <div class="cal-row">
-        <span class="cal-name">${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}</span>
-        ${showing ? `<span class="cal-on">● Showing</span>` : ""}
-        <span class="cal-acts">
-          ${saver}
-          ${showing
-            ? `<button class="btn mini" data-cal-stop="${esc(d.id)}" ${busy ? "disabled" : ""}>Stop</button>`
-            : `<button class="btn mini primary" data-cal-show="${esc(d.id)}" ${blocked || busy ? "disabled" : ""} title="${esc(blocked)}">${busy ? "Starting…" : "Show"}</button>`}
-        </span>
-      </div>`;
-  };
-  const column = (title: string, ds: Device[]) => ds.length === 0 ? "" : `
-      <div class="cast-col"><div class="cast-col-head"><span>${title}</span></div>${ds.map(row).join("")}</div>`;
-  const rokus = screens.filter((d) => d.backend === "roku");
-  const googles = screens.filter((d) => d.backend === "cast");
-  return `
-    <div class="cast-panel">
-      <div class="cal-head"><div class="cast-panel-title">Calendar on TV</div>${themePick}</div>
-      ${source}
-      ${cal.error && cal.saver ? `<div class="cast-warn">⚠ ${esc(cal.error)}${cal.error.includes("Update it") ? ` <button class="btn mini" id="cal-get">Get the latest</button>` : ""}</div>` : ""}
-      <div class="cast-cols">${column("Roku TVs", rokus)}${column("Google TVs & displays", googles)}
-        ${screens.length === 0 ? `<div class="hint">No TVs or Google screens are online.</div>` : ""}</div>
-      <div class="hint">Your calendar is redrawn on this PC every minute and sent to the TV as a picture, so this PC needs to be on. For a Roku screensaver, tick <b>Screensaver</b>, then on the TV choose <b>Settings › Theme › Screensaver › Calendar (Volume Sync)</b>.</div>
-    </div>`;
+function calSettings(): CalSettings | null {
+  return state.calendar ? structuredClone(state.calendar.settings) : null;
+}
+
+async function saveCal(s: CalSettings) {
+  try { await invoke("calendar_save", { settings: s }); } catch (e) { alert(String(e)); }
 }
 
 /** Run a calendar command for one screen, showing it as busy meanwhile. */
@@ -577,27 +678,238 @@ function calendarButton(d: Device, compact = false): string {
     title="${on ? "Stop showing the calendar on this screen" : "Show your calendar on this screen (updates every minute)"}">${compact ? "📅" : label}</button>`;
 }
 
-function wireCalendarPanel() {
-  const run = calRun;
-  document.querySelectorAll<HTMLElement>("[data-cal-show]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calShow!, "calendar_show", { ids: [b.dataset.calShow] })));
-  document.querySelectorAll<HTMLElement>("[data-cal-stop]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calStop!, "calendar_stop", { ids: [b.dataset.calStop] })));
-  document.querySelectorAll<HTMLInputElement>("[data-cal-ss]").forEach((cb) => cb.addEventListener("change", () => run(cb.dataset.calSs!, "calendar_screensaver", { id: cb.dataset.calSs, on: cb.checked })));
-  document.querySelectorAll<HTMLElement>("[data-cal-update]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calUpdate!, "calendar_screensaver", { id: b.dataset.calUpdate, on: true })));
-  document.getElementById("cal-locate")?.addEventListener("click", async () => {
-    const picked = await open({ multiple: false, filters: [{ name: "Calendar Saver", extensions: ["scr", "exe"] }] });
-    if (typeof picked !== "string") return;
-    try { await invoke("calendar_set_saver", { path: picked }); } catch (e) { alert(String(e)); }
-  });
-  document.getElementById("cal-get")?.addEventListener("click", () => openUrl(CALENDAR_SITE));
-  document.querySelectorAll<HTMLElement>("[data-cal-theme]").forEach((b) => b.addEventListener("click", () => {
-    if (b.classList.contains("on")) return;
-    invoke("calendar_set_theme", { theme: b.dataset.calTheme }).catch((e) => alert(String(e)));
+const seg = (name: string, value: string, options: [string, string][]) => `
+  <div class="seg" role="group" data-seg="${name}">${options.map(([v, label]) => `<button type="button" class="${v === value ? "on" : ""}" data-v="${v}">${label}</button>`).join("")}</div>`;
+
+const viewChecks = (name: string, views: string[]) => `
+  <span class="view-checks" data-views="${name}">${Object.entries(VIEW_NAMES).map(([v, label]) =>
+    `<label class="chk"><input type="checkbox" data-view-opt="${v}" ${views.includes(v) ? "checked" : ""}> ${label}</label>`).join("")}</span>`;
+
+const selectOf = (attr: string, value: number, options: [number, string][]) => `
+  <select ${attr}>${options.some(([v]) => v === value) ? "" : `<option value="${value}" selected>${value}</option>`}${options.map(([v, label]) => `<option value="${v}" ${v === value ? "selected" : ""}>${label}</option>`).join("")}</select>`;
+
+function renderCalendar() {
+  const cal = state.calendar;
+  if (!cal) { content.innerHTML = `<h2>Calendar</h2><div class="hint">Loading…</div>`; return; }
+  const s = cal.settings;
+  const when = cal.updated ? new Date(cal.updated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  const feedProblems = cal.feeds.filter((f) => f.enabled && (f.error || f.stale));
+  const status = cal.rendering
+    ? `<span class="cal-on">● Drawing for your TVs</span> · updated ${esc(when || "…")} · ${cal.events} events · ${cal.photos} photos`
+    : `Not drawing right now: it starts when a TV shows the calendar.`;
+
+  // ----- screens -----
+  const screens = calendarScreens();
+  const row = (d: Device) => {
+    const showing = cal.showing.includes(d.id);
+    const blocked = castBlocked(d);
+    const busy = calBusy.has(d.id);
+    const saver = d.backend === "roku" ? `
+        <label class="chk" title="Keep the calendar on this TV as its Roku screensaver">
+          <input type="checkbox" data-cal-ss="${esc(d.id)}" ${cal.screensaver_tvs.includes(d.id) ? "checked" : ""} ${blocked || busy ? "disabled" : ""}> Screensaver</label>
+        ${cal.outdated.includes(d.id) ? `<button class="btn mini" data-cal-update="${esc(d.id)}" title="The TV's saved screensaver settings are out of date (theme, views, 4K or this PC's address changed)">Update TV</button>` : ""}` : "";
+    return `
+      <div class="cal-row">
+        <span class="cal-name">${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}</span>
+        ${showing ? `<span class="cal-on">● Showing</span>` : ""}
+        <span class="cal-acts">
+          ${saver}
+          ${showing
+            ? `<button class="btn mini" data-cal-stop="${esc(d.id)}" ${busy ? "disabled" : ""}>Stop</button>`
+            : `<button class="btn mini primary" data-cal-show="${esc(d.id)}" ${blocked || busy ? "disabled" : ""} title="${esc(blocked)}">${busy ? "Starting…" : "Show"}</button>`}
+        </span>
+      </div>`;
+  };
+  const column = (title: string, ds: Device[]) => ds.length === 0 ? "" : `
+      <div class="cast-col"><div class="cast-col-head"><span>${title}</span></div>${ds.map(row).join("")}</div>`;
+
+  // ----- previews -----
+  const previews = cal.updated ? `
+      <div class="cal-previews">${Object.entries(VIEW_NAMES).map(([v, label]) => `
+        <figure data-cal-preview="${v}" title="Open the ${label.toLowerCase()} view">
+          <img src="http://calphoto.localhost/preview/calendar-${s.theme}-${v}.jpg?v=${cal.updated}" alt="${label} view" onerror="this.closest('figure').classList.add('missing')">
+          <figcaption>${label}</figcaption>
+        </figure>`).join("")}
+      </div>` : "";
+
+  // ----- schedules -----
+  const allScreens = calendarScreens(true);
+  const schedCardHtml = (sc: CalSchedule) => `
+    <div class="card cal-sched" data-csid="${esc(sc.id)}">
+      <div class="row wrap">
+        <label class="chk"><input type="checkbox" data-cs="enabled" ${sc.enabled ? "checked" : ""}> On</label>
+        ${timePicker(sc.start)}
+        <span class="lbl">for</span> ${selectOf('data-cs="duration_min"', sc.duration_min, DURATIONS)}
+        <div class="day-row">${DAY_NAMES.map((n, i) => `<label>${n}<input type="checkbox" data-csday="${i}" ${sc.days[i] ? "checked" : ""} /></label>`).join("")}</div>
+        <div class="grow"></div>
+        <button class="btn danger mini" data-cs="delete">Delete</button>
+      </div>
+      <div class="cal-sched-grid">
+        <div class="lbl">Screens</div>
+        <div class="cal-devs">${allScreens.map((d) => `<label class="chk"><input type="checkbox" data-csdev="${esc(d.id)}" ${sc.devices.includes(d.id) ? "checked" : ""}> ${esc(displayName(d))}</label>`).join("") || `<span class="hint-inline">No TVs or Google screens found yet.</span>`}</div>
+        <div class="lbl">Look</div>
+        <div class="row wrap">${seg("theme", sc.theme || "default", [["default", "Usual"], ["light", "Light"], ["dark", "Dark"]])}
+          ${viewChecks("views", sc.views)} <span class="lbl">switch</span> ${selectOf('data-cs="rotate_secs"', sc.rotate_secs, ROTATE_CHOICES)}</div>
+        <div class="lbl">TV</div>
+        <div class="cal-opts">
+          <label class="chk"><input type="checkbox" data-cs="power_on" ${sc.power_on ? "checked" : ""}> Turn the TV on if it's off</label>
+          <label class="chk"><input type="checkbox" data-cs="dont_interrupt" ${sc.dont_interrupt ? "checked" : ""}> Don't interrupt a show or movie (the screensaver and home screen are fine); it waits until it's over</label>
+          <label class="chk"><input type="checkbox" data-cs="off_after" ${sc.off_after ? "checked" : ""}> When the time's up, turn the TV off if it's still showing the calendar</label>
+          <label class="chk"><input type="checkbox" data-cs="idle_on" ${sc.idle_off_min > 0 ? "checked" : ""}> Turn it off early if nobody presses a remote button for
+            ${selectOf('data-cs="idle_off_min"', sc.idle_off_min || 30, IDLE_CHOICES.map((m) => [m, `${m} minutes`]))}</label>
+        </div>
+      </div>
+    </div>`;
+
+  // ----- calendars -----
+  const feedRow = (f: CalFeed, i: number) => {
+    const st = cal.feeds[i];
+    const problem = st && st.enabled ? (st.error ? `✕ ${st.error}` : st.stale ? "⚠ showing the saved copy" : "") : "";
+    return `
+      <div class="feed-row" data-feed="${i}">
+        <input type="checkbox" data-f="enabled" ${f.enabled ? "checked" : ""} title="Show this calendar">
+        <input type="color" data-f="color" value="${esc(f.color || "#7aa2f7")}" title="Colour">
+        <input type="text" data-f="name" value="${esc(f.name)}" placeholder="Name" class="feed-name">
+        <input type="text" data-f="url" value="${esc(f.url)}" placeholder="Secret address in iCal format (…/basic.ics)" class="feed-url" spellcheck="false">
+        <button class="btn mini" data-f="test">Test</button>
+        <button class="btn icon danger" data-f="del" title="Remove">✕</button>
+        ${problem ? `<div class="feed-problem">${esc(problem)}</div>` : ""}
+        <div class="feed-test" data-test="${i}"></div>
+      </div>`;
+  };
+
+  content.innerHTML = `
+    <h2>Calendar <span class="sub">your calendars and photos, on your TVs</span></h2>
+    <div class="cal-status">${status}${cal.error ? ` · <span class="warn">⚠ ${esc(cal.error)}</span>` : ""}${feedProblems.length ? ` · <span class="warn">⚠ ${feedProblems.map((f) => esc(f.name)).join(", ")}</span>` : ""}</div>
+
+    <section class="cal-sec">
+      <h3>On your TVs</h3>
+      <div class="cast-cols">${column("Roku TVs", screens.filter((d) => d.backend === "roku"))}${column("Google TVs & displays", screens.filter((d) => d.backend === "cast"))}
+        ${screens.length === 0 ? `<div class="hint">No TVs or Google screens are online.</div>` : ""}</div>
+      <div class="hint">For a Roku screensaver, tick <b>Screensaver</b>, then on the TV choose <b>Settings › Theme › Screensaver › Calendar (Volume Sync)</b>. On a Roku, <b>Up</b> and <b>Down</b> on the remote switch between month, week and day. This PC needs to be on: it redraws the calendar every minute.</div>
+    </section>
+
+    <section class="cal-sec">
+      <h3>Look</h3>
+      <div class="cal-look">
+        <div class="lbl">Theme</div><div>${seg("main-theme", s.theme, [["dark", "🌙 Dark"], ["light", "☀️ Light"]])}</div>
+        <div class="lbl">Shows</div><div class="row wrap">${viewChecks("main-views", s.views)} <span class="lbl">switch</span> ${selectOf('id="cal-rotate"', s.rotate_secs, ROTATE_CHOICES)}</div>
+        <div class="lbl">Sharpness</div><div><label class="chk"><input type="checkbox" id="cal-4k" ${s.four_k ? "checked" : ""}> 4K on Roku TVs <span class="hint-inline">(sent as a one-frame video, since Roku apps draw pictures at 1080p)</span></label></div>
+      </div>
+      ${previews}
+    </section>
+
+    <section class="cal-sec">
+      <h3>Scheduled times <button class="btn mini primary" id="cal-add-sched">+ New</button></h3>
+      ${s.schedules.map(schedCardHtml).join("") || `<div class="hint">For example: weekdays at 7:00 AM for 1½ hours in light mode, turning the TV on and back off.</div>`}
+    </section>
+
+    <section class="cal-sec">
+      <h3>Calendars <button class="btn mini primary" id="cal-add-feed">+ Add</button>
+        ${cal.saver_found ? `<button class="btn mini" id="cal-import">Copy from PactoTech Calendar Saver</button>` : ""}</h3>
+      ${s.feeds.map(feedRow).join("") || `<div class="hint">Add a calendar's secret iCal address. In Google Calendar: Settings › your calendar › Integrate calendar › Secret address in iCal format.</div>`}
+    </section>
+
+    <section class="cal-sec">
+      <h3>Photos <button class="btn mini primary" id="cal-add-folder">+ Add folder</button></h3>
+      ${s.photo_folders.map((p, i) => `<div class="folder-row"><span title="${esc(p)}">📁 ${esc(p)}</span><button class="btn icon danger" data-folder-del="${i}" title="Remove">✕</button></div>`).join("") || `<div class="hint">Photos from these folders (and their subfolders) fill the side of the calendar.</div>`}
+      <div class="row" style="margin-top:8px"><span class="lbl">Change a photo every</span> ${selectOf('id="cal-photo-secs"', s.photo_interval_secs, PHOTO_SECS)}</div>
+    </section>
+    <div class="hint">The calendar's design comes from the PactoTech Calendar Saver (calendarsaver.com).</div>
+  `;
+  wireCalendarPage();
+}
+
+function wireCalendarPage() {
+  const q = <T extends Element = HTMLElement>(sel: string) => content.querySelector<T>(sel);
+  const all = <T extends Element = HTMLElement>(sel: string, root: ParentNode = content) => [...root.querySelectorAll<T>(sel)];
+  const edit = (f: (s: CalSettings) => void) => { const s = calSettings(); if (!s) return; f(s); saveCal(s); };
+  const segValue = (root: ParentNode, name: string, set: (v: string) => void) =>
+    all<HTMLElement>(`[data-seg="${name}"] [data-v]`, root).forEach((b) => b.addEventListener("click", () => set(b.dataset.v!)));
+  const viewsFrom = (root: ParentNode, name: string) => all<HTMLInputElement>(`[data-views="${name}"] [data-view-opt]`, root).filter((c) => c.checked).map((c) => c.dataset.viewOpt!);
+
+  all("[data-cal-show]").forEach((b) => b.addEventListener("click", () => calRun(b.dataset.calShow!, "calendar_show", { ids: [b.dataset.calShow] })));
+  all("[data-cal-stop]").forEach((b) => b.addEventListener("click", () => calRun(b.dataset.calStop!, "calendar_stop", { ids: [b.dataset.calStop] })));
+  all<HTMLInputElement>("[data-cal-ss]").forEach((cb) => cb.addEventListener("change", () => calRun(cb.dataset.calSs!, "calendar_screensaver", { id: cb.dataset.calSs, on: cb.checked })));
+  all("[data-cal-update]").forEach((b) => b.addEventListener("click", () => calRun(b.dataset.calUpdate!, "calendar_screensaver", { id: b.dataset.calUpdate, on: true })));
+  all("[data-cal-preview]").forEach((f) => f.addEventListener("click", () =>
+    invoke("calendar_preview", { theme: state.calendar!.settings.theme, view: f.dataset.calPreview }).catch((e) => alert(String(e)))));
+
+  // look
+  segValue(content, "main-theme", (v) => edit((s) => { s.theme = v; }));
+  all<HTMLInputElement>('[data-views="main-views"] input').forEach((cb) => cb.addEventListener("change", () => edit((s) => { s.views = viewsFrom(content, "main-views"); })));
+  q<HTMLSelectElement>("#cal-rotate")?.addEventListener("change", (e) => edit((s) => { s.rotate_secs = Number((e.target as HTMLSelectElement).value); }));
+  q<HTMLInputElement>("#cal-4k")?.addEventListener("change", (e) => edit((s) => { s.four_k = (e.target as HTMLInputElement).checked; }));
+  q<HTMLSelectElement>("#cal-photo-secs")?.addEventListener("change", (e) => edit((s) => { s.photo_interval_secs = Number((e.target as HTMLSelectElement).value); }));
+
+  // schedules
+  q("#cal-add-sched")?.addEventListener("click", () => edit((s) => {
+    s.schedules.push({
+      id: crypto.randomUUID(), enabled: true, days: [true, true, true, true, true, false, false], start: "07:00", duration_min: 90,
+      devices: calendarScreens(true).filter((d) => d.backend === "roku").map((d) => d.id), theme: "light", views: ["month"], rotate_secs: 0,
+      power_on: true, dont_interrupt: true, off_after: true, idle_off_min: 0,
+    });
   }));
-  document.getElementById("cal-preview")?.addEventListener("click", () => invoke("calendar_preview").catch((e) => alert(String(e))));
+  all(".cal-sched").forEach((card) => {
+    const id = (card as HTMLElement).dataset.csid!;
+    const upd = (f: (sc: CalSchedule) => void) => edit((s) => { const sc = s.schedules.find((x) => x.id === id); if (sc) f(sc); });
+    const cs = (name: string) => card.querySelector<HTMLInputElement & HTMLSelectElement>(`[data-cs="${name}"]`);
+    cs("enabled")?.addEventListener("change", (e) => upd((sc) => { sc.enabled = (e.target as HTMLInputElement).checked; }));
+    cs("duration_min")?.addEventListener("change", (e) => upd((sc) => { sc.duration_min = Number((e.target as HTMLSelectElement).value); }));
+    cs("rotate_secs")?.addEventListener("change", (e) => upd((sc) => { sc.rotate_secs = Number((e.target as HTMLSelectElement).value); }));
+    for (const k of ["power_on", "dont_interrupt", "off_after"] as const)
+      cs(k)?.addEventListener("change", (e) => upd((sc) => { sc[k] = (e.target as HTMLInputElement).checked; }));
+    const idleSel = cs("idle_off_min");
+    cs("idle_on")?.addEventListener("change", (e) => upd((sc) => { sc.idle_off_min = (e.target as HTMLInputElement).checked ? Number(idleSel?.value || 30) : 0; }));
+    idleSel?.addEventListener("change", () => upd((sc) => { sc.idle_off_min = Number(idleSel.value); }));
+    cs("delete")?.addEventListener("click", () => edit((s) => { s.schedules = s.schedules.filter((x) => x.id !== id); }));
+    all<HTMLInputElement>("[data-csday]", card).forEach((cb) => cb.addEventListener("change", () => upd((sc) => { sc.days[Number(cb.dataset.csday)] = cb.checked; })));
+    all<HTMLInputElement>("[data-csdev]", card).forEach((cb) => cb.addEventListener("change", () => upd((sc) => {
+      sc.devices = sc.devices.filter((d) => d !== cb.dataset.csdev);
+      if (cb.checked) sc.devices.push(cb.dataset.csdev!);
+    })));
+    segValue(card, "theme", (v) => upd((sc) => { sc.theme = v; }));
+    all<HTMLInputElement>('[data-views="views"] input', card).forEach((cb) => cb.addEventListener("change", () => upd((sc) => { sc.views = viewsFrom(card, "views"); })));
+    // time
+    const tp = card.querySelector<HTMLElement>(".tpick")!;
+    const cur = () => { const sc = state.calendar!.settings.schedules.find((x) => x.id === id)!; const [h, m] = parseTime(sc.start); return { h12: h % 12 || 12, m, pm: h >= 12 }; };
+    const setTime = (h12: number, m: number, pm: boolean) => upd((sc) => { sc.start = `${String((h12 % 12) + (pm ? 12 : 0)).padStart(2, "0")}:${String(m).padStart(2, "0")}`; });
+    tp.querySelector<HTMLSelectElement>('[data-t="h"]')!.addEventListener("change", (e) => { const c = cur(); setTime(Number((e.target as HTMLSelectElement).value), c.m, c.pm); });
+    tp.querySelector<HTMLSelectElement>('[data-t="m"]')!.addEventListener("change", (e) => { const c = cur(); setTime(c.h12, Number((e.target as HTMLSelectElement).value), c.pm); });
+    all<HTMLElement>("[data-ampm]", tp).forEach((b) => b.addEventListener("click", () => { const c = cur(); setTime(c.h12, c.m, b.dataset.ampm === "pm"); }));
+  });
+
+  // calendars
+  q("#cal-add-feed")?.addEventListener("click", () => edit((s) => { s.feeds.push({ url: "", name: "", color: ["#7aa2f7", "#f7768e", "#9ece6a", "#e0af68", "#bb9af7"][s.feeds.length % 5], enabled: true }); }));
+  q("#cal-import")?.addEventListener("click", async () => {
+    try { alert(await invoke<string>("calendar_import_saver")); } catch (e) { alert(String(e)); }
+  });
+  all(".feed-row").forEach((rowEl) => {
+    const i = Number((rowEl as HTMLElement).dataset.feed);
+    const f = (name: string) => rowEl.querySelector<HTMLInputElement>(`[data-f="${name}"]`)!;
+    const upd = (fn: (feed: CalFeed) => void) => edit((s) => { if (s.feeds[i]) fn(s.feeds[i]); });
+    f("enabled").addEventListener("change", (e) => upd((x) => { x.enabled = (e.target as HTMLInputElement).checked; }));
+    f("color").addEventListener("change", (e) => upd((x) => { x.color = (e.target as HTMLInputElement).value; }));
+    f("name").addEventListener("change", (e) => upd((x) => { x.name = (e.target as HTMLInputElement).value.trim(); }));
+    f("url").addEventListener("change", (e) => upd((x) => { x.url = (e.target as HTMLInputElement).value.trim(); }));
+    f("del").addEventListener("click", () => { if (confirm("Remove this calendar?")) edit((s) => { s.feeds.splice(i, 1); }); });
+    f("test").addEventListener("click", async () => {
+      const out = rowEl.querySelector<HTMLElement>(".feed-test")!;
+      out.textContent = "Checking…";
+      try { out.textContent = "✓ " + await invoke<string>("calendar_test_feed", { url: f("url").value.trim() }); }
+      catch (e) { out.textContent = "✕ " + String(e); }
+    });
+  });
+
+  // photos
+  q("#cal-add-folder")?.addEventListener("click", async () => {
+    const picked = await open({ directory: true, multiple: false });
+    if (typeof picked === "string") edit((s) => { if (!s.photo_folders.includes(picked)) s.photo_folders.push(picked); });
+  });
+  all("[data-folder-del]").forEach((b) => b.addEventListener("click", () => edit((s) => { s.photo_folders.splice(Number(b.dataset.folderDel), 1); })));
 }
 
 function wireCastPanel() {
-  if (castMode === "calendar") return wireCalendarPanel();
   document.querySelectorAll<HTMLInputElement>("[data-cast-pick]").forEach((cb) => cb.addEventListener("change", () => {
     if (cb.checked) castPicked.add(cb.dataset.castPick!); else castPicked.delete(cb.dataset.castPick!);
     render();
@@ -629,7 +941,7 @@ function renderDevices() {
       <span class="toolbar-gap"></span>
       <button class="btn ${castMode === "video" ? "primary" : ""}" data-cast-mode="video" title="Play a video or pictures from this PC on one or more screens">🎬 Play Video or Pictures</button>
       <button class="btn ${castMode === "audio" ? "primary" : ""}" data-cast-mode="audio" title="Play music from this PC on one or more speakers or TVs">🎵 Play Audio</button>
-      <button class="btn ${castMode === "calendar" ? "primary" : ""}" data-cast-mode="calendar" title="Show your PactoTech Calendar Saver on TVs, or use it as a Roku screensaver">📅 Calendar on TV</button>
+      <button class="btn" id="go-calendar" title="Your calendar on TVs: show it, schedule it, or use it as a Roku screensaver">📅 Calendar</button>
     </div>
     ${castMode ? castPanel() : ""}
     ${section("Roku TVs", state.devices.filter((d) => d.backend === "roku"), stale)}
@@ -648,11 +960,12 @@ function renderDevices() {
     setTimeout(() => { btn.disabled = false; btn.textContent = "Scan for Roku TVs"; }, 2500);
   });
   document.getElementById("add-manual")!.addEventListener("click", showAddManual);
+  document.getElementById("go-calendar")?.addEventListener("click", () => { view = "calendar"; render(); });
   document.querySelectorAll<HTMLElement>("[data-cast-mode]").forEach((b) => b.addEventListener("click", () => {
     const mode = b.dataset.castMode as CastMode;
     castMode = castMode === mode ? "" : mode;
     // Keep only the picks that still make sense (no speakers for video).
-    const ok = new Set(castMode === "calendar" ? [] : castEligible(castMode).map((d) => d.id));
+    const ok = new Set(castEligible(castMode).map((d) => d.id));
     [...castPicked].forEach((id) => { if (!ok.has(id)) castPicked.delete(id); });
     render();
   }));
@@ -702,6 +1015,7 @@ function deviceCard(d: Device, stale: boolean): string {
     </div>
     ${d.tv ? tvRow(d) : ""}
     ${media}
+    ${queueView(d)}
     </div>
     ${remote ? rokuRemote() : ""}
   </div>`;
@@ -914,6 +1228,10 @@ function wireDeviceCard(d: Device) {
     render();
   });
   q('[data-act="play-files"]')?.addEventListener("click", () => chooseAndPlay(d));
+  q('[data-act="queue-edit"]')?.addEventListener("click", () => editQueue(d));
+  card.querySelector<HTMLDetailsElement>(".dev-queue")?.addEventListener("toggle", (e) => {
+    if ((e.target as HTMLDetailsElement).open) openQueues.add(d.id); else openQueues.delete(d.id);
+  });
   q('[data-act="calendar"]')?.addEventListener("click", () => state.calendar?.showing.includes(d.id)
     ? calRun(d.id, "calendar_stop", { ids: [d.id] })
     : calRun(d.id, "calendar_show", { ids: [d.id] }));
@@ -1297,6 +1615,7 @@ function render() {
     case "schedule": return renderSchedule();
     case "log": return void renderLog();
     case "settings": return renderSettings();
+    case "calendar": return renderCalendar();
   }
 }
 

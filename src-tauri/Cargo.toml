@@ -37,6 +37,11 @@ dirs = "5"
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "4", default-features = false }
 md5 = "0.7"
+chrono-tz = "0.10"
+sha2 = "0.10"
+image = { version = "0.25", default-features = false, features = ["png"] }
+webview2-com = "0.38"
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [profile.release]
 codegen-units = 1
