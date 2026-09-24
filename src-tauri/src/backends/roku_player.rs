@@ -136,6 +136,13 @@ pub struct Item {
     pub title: String,
     pub fmt: &'static str,
     pub subtitles: Option<String>,
+    /// false = load paused, for starting several devices together.
+    pub autoplay: bool,
+}
+
+/// "video", "audio" or "image" for a Roku stream format.
+pub fn kind(fmt: &str) -> &'static str {
+    if fmt == "image" { "image" } else if fmt.starts_with("audio:") { "audio" } else { "video" }
 }
 
 /// Roku's streamFormat for a file, or None if the TV can't play it.
@@ -168,6 +175,11 @@ fn format_for_ext(ext: &str) -> Option<&'static str> {
         "webm" => Some("mp4"),
         "m3u8" => Some("hls"),
         "jpg" | "jpeg" | "png" | "gif" | "bmp" => Some("image"),
+        "mp3" => Some("audio:mp3"),
+        "m4a" => Some("audio:mp4"),
+        "aac" => Some("audio:es.aac-adts"),
+        "flac" => Some("audio:flac"),
+        "wav" => Some("audio:wav"),
         _ => None,
     }
 }
@@ -185,6 +197,9 @@ pub async fn play(ip: &str, items: &[Item]) -> Result<(), String> {
     let active = c.get(format!("http://{ip}:8060/query/active-app")).send().await
         .map_err(|e| e.to_string())?.text().await.unwrap_or_default();
     let mut params = format!("n={}", items.len());
+    if items.first().map(|i| !i.autoplay).unwrap_or(false) {
+        params += "&ap=0";
+    }
     for (i, it) in items.iter().enumerate() {
         let n = i + 1;
         params += &format!("&u{n}={}&t{n}={}&f{n}={}", q(&it.url), q(&it.title), it.fmt);

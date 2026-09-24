@@ -151,6 +151,7 @@ async fn cast_files(core: &Core, id: &str, ip: &str, paths: &[std::path::PathBuf
             title: p.file_stem().and_then(|s| s.to_str()).unwrap_or("Media").to_string(),
             content_type,
             subtitles,
+            autoplay: true,
         });
     }
     core.send_cmd(id, DeviceCmd::Cast(items));
@@ -170,12 +171,14 @@ pub async fn play_files(core: CoreState<'_>, id: String, paths: Vec<String>) -> 
     let unsupported: Vec<String> = paths.iter().filter(|p| stream_format(p).is_none())
         .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from)).collect();
     if !unsupported.is_empty() {
-        return Err(format!("Roku TVs play MP4, MOV, MKV and TS videos and JPG, PNG, GIF and BMP pictures. Not supported: {}", unsupported.join(", ")));
+        return Err(format!("Roku TVs play MP4, MOV, MKV and TS video, MP3, M4A, AAC, FLAC and WAV music, and JPG, PNG, GIF and BMP pictures. Not supported: {}", unsupported.join(", ")));
     }
-    let pictures = paths.iter().filter(|p| stream_format(p) == Some("image")).count();
-    if pictures > 0 && pictures < paths.len() {
-        return Err("Choose either pictures or videos, not both at once.".into());
+    let kinds: std::collections::BTreeSet<&str> = paths.iter()
+        .filter_map(|p| stream_format(p)).map(crate::backends::roku_player::kind).collect();
+    if kinds.len() > 1 {
+        return Err("On a Roku, choose one kind at a time: videos, music or pictures.".into());
     }
+    let pictures = if kinds.contains("image") { paths.len() } else { 0 };
     let ip = tv_ready(&core, &id).await?;
     // Keep the player channel current (e.g. pictures need a newer version).
     if crate::backends::roku_player::needs_upgrade(&ip).await {
@@ -201,6 +204,7 @@ pub async fn play_files(core: CoreState<'_>, id: String, paths: Vec<String>) -> 
             title: p.file_stem().and_then(|s| s.to_str()).unwrap_or("Video").to_string(),
             fmt: stream_format(p).unwrap_or("mp4"),
             subtitles,
+            autoplay: true,
         });
     }
     crate::backends::roku_player::play(&ip, &items).await?;
@@ -225,12 +229,12 @@ pub async fn play_url(core: CoreState<'_>, id: String, url: String) -> Result<()
             else if lower.ends_with(".webm") { "video/webm" }
             else { "video/mp4" };
         let title = url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).filter(|t| !t.is_empty()).unwrap_or("Media").to_string();
-        core.send_cmd(&id, DeviceCmd::Cast(vec![crate::types::CastItem { url, title, content_type: content_type.into(), subtitles: None }]));
+        core.send_cmd(&id, DeviceCmd::Cast(vec![crate::types::CastItem { url, title, content_type: content_type.into(), subtitles: None, autoplay: true }]));
         return Ok(());
     }
     let ip = tv_ready(&core, &id).await?;
     let title = url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).filter(|t| !t.is_empty()).unwrap_or("Video").to_string();
-    let item = Item { fmt: stream_format_for_url(&url), url, title, subtitles: None };
+    let item = Item { fmt: stream_format_for_url(&url), url, title, subtitles: None, autoplay: true };
     crate::backends::roku_player::play(&ip, &[item]).await?;
     core.send_cmd(&id, DeviceCmd::Resync);
     Ok(())

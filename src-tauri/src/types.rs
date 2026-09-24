@@ -40,6 +40,8 @@ pub struct CastItem {
     pub content_type: String,
     /// WebVTT subtitles URL.
     pub subtitles: Option<String>,
+    /// false = load paused, for starting several devices together.
+    pub autoplay: bool,
 }
 
 impl CastItem {

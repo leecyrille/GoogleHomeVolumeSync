@@ -262,9 +262,26 @@ function canShowPictures(d: Device): boolean {
   return d.backend === "cast" && !d.is_cast_group && !AUDIO_ONLY.test(d.model);
 }
 
-async function showPictures(d: Device) {
-  const exts = d.backend === "roku" ? ROKU_PICTURES : CAST_PICTURES;
-  const picked = await open({ multiple: true, filters: [{ name: "Pictures", extensions: exts }] });
+const ROKU_AUDIO = ["mp3", "m4a", "aac", "flac", "wav"];
+
+/** What a device can play: [videos, music, pictures] extension lists. */
+function playableKinds(d: Device): [string[], string[], string[]] {
+  if (d.backend === "roku") return [VIDEO_EXTS, ROKU_AUDIO, ROKU_PICTURES];
+  // Speakers and speaker groups play the sound of a video, but can't show pictures.
+  return [CAST_VIDEO, CAST_AUDIO, canShowPictures(d) ? CAST_PICTURES : []];
+}
+
+/** Pick any mix of files the device supports and play them there. */
+async function chooseAndPlay(d: Device) {
+  const [video, audio, pictures] = playableKinds(d);
+  const all = [...video, ...audio, ...pictures];
+  const filters = [
+    { name: "Everything this device can play", extensions: all },
+    { name: "Videos", extensions: video },
+    { name: "Music", extensions: audio },
+    ...(pictures.length ? [{ name: "Pictures", extensions: pictures }] : []),
+  ];
+  const picked = await open({ multiple: true, filters });
   const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
   if (paths.length === 0) return;
   try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
@@ -286,26 +303,16 @@ function castPanel(): string {
       </label>
       <button class="btn" id="cast-files" ${targets.length ? "" : "disabled"}>Choose files…</button>
       <button class="btn" id="cast-link" ${targets.length ? "" : "disabled"}>Play a link…</button>
-      <button class="btn" id="cast-pictures" ${targets.some((d) => d.id === castTarget && canShowPictures(d)) ? "" : "disabled title=\"Speakers and speaker groups can't show pictures\""}>🖼 Show pictures…</button>
-      <div class="hint">Video goes to TVs, Nest Hubs and Chromecasts; music plays on any speaker or speaker group. Several files play in order, and a same-named .srt or .vtt next to a video becomes subtitles. Several pictures become a slideshow (8 seconds each). Files are shared only with the device you pick, for 12 hours.</div>
+      <div class="hint">Videos, music and pictures play on TVs, Nest Hubs and Chromecasts. Speakers and speaker groups play music and the sound of videos. Several files play in order, a same-named .srt or .vtt next to a video becomes subtitles, and several pictures become a slideshow (8 seconds each). Files are shared only with the device you pick, for 12 hours.</div>
     </div>`;
 }
 
 function wireCastPanel() {
   const sel = document.getElementById("cast-target") as HTMLSelectElement | null;
-  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); render(); });
-  document.getElementById("cast-pictures")?.addEventListener("click", () => {
+  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); });
+  document.getElementById("cast-files")?.addEventListener("click", () => {
     const d = state.devices.find((x) => x.id === castTarget);
-    if (d) showPictures(d);
-  });
-  document.getElementById("cast-files")?.addEventListener("click", async () => {
-    const d = state.devices.find((x) => x.id === castTarget);
-    if (!d) return;
-    const exts = d.backend === "roku" ? VIDEO_EXTS : [...CAST_VIDEO, ...CAST_AUDIO];
-    const picked = await open({ multiple: true, filters: [{ name: "Video and music", extensions: exts }] });
-    const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
-    if (paths.length === 0) return;
-    try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
+    if (d) chooseAndPlay(d);
   });
   document.getElementById("cast-link")?.addEventListener("click", async () => {
     if (!castTarget) return;
@@ -433,9 +440,8 @@ function playRow(d: Device): string {
   if (tv.player_ready) {
     return `
     <div class="tv-play">
-      <button class="btn" data-act="play-files" title="Pick one or more video files on this PC; they play in order. Subtitles (.srt or .vtt with the same name) come along.">▶ Play videos…</button>
+      <button class="btn" data-act="play-files" title="Videos, music or pictures from this PC. Several play in order (pictures as a slideshow); a same-named .srt or .vtt comes along as subtitles.">▶ Play files…</button>
       <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>
-      <button class="btn" data-act="show-pictures" title="Pick one or more pictures; several become a slideshow. Use ◀ ▶ on the remote to step through.">🖼 Show pictures…</button>
     </div>`;
   }
   const open = setupOpen.has(d.id);
@@ -552,13 +558,7 @@ function wireDeviceCard(d: Device) {
     } catch (e) { setupMsg.set(d.id, String(e)); }
     render();
   });
-  q('[data-act="play-files"]')?.addEventListener("click", async () => {
-    const picked = await open({ multiple: true, filters: [{ name: "Videos", extensions: VIDEO_EXTS }] });
-    const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
-    if (paths.length === 0) return;
-    try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
-  });
-  q('[data-act="show-pictures"]')?.addEventListener("click", () => showPictures(d));
+  q('[data-act="play-files"]')?.addEventListener("click", () => chooseAndPlay(d));
   q('[data-act="play-url"]')?.addEventListener("click", async () => {
     const url = prompt("Video link (MP4, MKV, TS or an M3U8 live stream):");
     if (!url) return;

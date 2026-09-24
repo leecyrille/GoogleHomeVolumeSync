@@ -14,5 +14,7 @@
       loadDisplayMode="scaleToFit" visible="false" />
     <Timer id="slideTimer" repeat="true" duration="8" />
     <Video id="video" width="1920" height="1080" visible="false" />
+    <Audio id="audio" />
+    <Label id="nowPlaying" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true" visible="false" />
   </children>
 </component>

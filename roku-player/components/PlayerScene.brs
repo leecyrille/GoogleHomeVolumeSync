@@ -6,7 +6,11 @@ sub init()
     m.timer = m.top.findNode("slideTimer")
     m.slides = []
     m.slideIndex = 0
+    m.audio = m.top.findNode("audio")
+    m.nowPlaying = m.top.findNode("nowPlaying")
     m.video.observeField("state", "onState")
+    m.audio.observeField("state", "onAudioState")
+    m.audio.observeField("contentIndex", "onAudioIndex")
     m.timer.observeField("fire", "onSlideTimer")
 end sub
 
@@ -17,10 +21,17 @@ sub playFrom(args as Object)
     count = Val(args.n)
     if count < 1 then return
     if args.f1 = "image" then
+        stopAudio()
         showPictures(args, count)
         return
     end if
     stopPictures()
+    ' f = "audio:<format>" means music: play it without a video surface.
+    if args.f1 <> invalid and Left(args.f1, 6) = "audio:" then
+        playAudio(args, count)
+        return
+    end if
+    stopAudio()
     playlist = CreateObject("roSGNode", "ContentNode")
     hasSubs = false
     for i = 1 to count
@@ -48,7 +59,72 @@ sub playFrom(args as Object)
     m.video.visible = true
     m.hint.visible = false
     m.video.setFocus(true)
-    m.video.control = "play"
+    ' ap=0 loads without starting, so several devices can start together.
+    if args.ap = "0" then m.video.control = "prebuffer" else m.video.control = "play"
+end sub
+
+sub playAudio(args as Object, count as Integer)
+    m.video.control = "stop"
+    m.video.visible = false
+    playlist = CreateObject("roSGNode", "ContentNode")
+    for i = 1 to count
+        url = args["u" + i.toStr()]
+        f = args["f" + i.toStr()]
+        if url <> invalid and url <> "" and f <> invalid
+            item = playlist.createChild("ContentNode")
+            item.url = url
+            item.streamFormat = Mid(f, 7)
+            title = args["t" + i.toStr()]
+            if title <> invalid then item.title = title
+        end if
+    end for
+    if playlist.getChildCount() = 0 then return
+    m.audio.control = "stop"
+    m.audio.contentIsPlaylist = true
+    m.audio.content = playlist
+    m.hint.visible = false
+    m.nowPlaying.visible = true
+    showAudioTitle()
+    m.top.setFocus(true)
+    if args.ap = "0" then m.audio.control = "prebuffer" else m.audio.control = "play"
+end sub
+
+sub stopAudio()
+    m.audio.control = "stop"
+    m.nowPlaying.visible = false
+end sub
+
+sub showAudioTitle()
+    c = m.audio.content
+    if c = invalid then return
+    i = m.audio.contentIndex
+    if i < 0 then i = 0
+    item = c.getChild(i)
+    if item <> invalid then m.nowPlaying.text = "♪" + Chr(10) + item.title
+end sub
+
+sub onAudioIndex()
+    showAudioTitle()
+end sub
+
+sub onAudioState()
+    if m.audio.state = "finished" then
+        m.nowPlaying.visible = false
+        m.hint.visible = true
+    end if
+end sub
+
+' Pause / play / resume whichever player is in use.
+sub control(action as String)
+    if m.nowPlaying.visible
+        target = m.audio
+    else
+        target = m.video
+    end if
+    if action = "play" and (target.state = "paused" or target.state = "none" or target.state = "stopped")
+        if target.state = "paused" then action = "resume"
+    end if
+    target.control = action
 end sub
 
 sub showPictures(args as Object, count as Integer)
@@ -118,9 +194,9 @@ sub onInput()
     if a.n <> invalid then
         playFrom(a)
     else if a.seek <> invalid then
-        m.video.seek = Val(a.seek) / 1000.0
+        if m.nowPlaying.visible then m.audio.seek = Val(a.seek) / 1000.0 else m.video.seek = Val(a.seek) / 1000.0
     else if a.control <> invalid then
-        m.video.control = a.control
+        control(a.control)
     end if
 end sub
 

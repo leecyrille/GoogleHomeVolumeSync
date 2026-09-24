@@ -132,7 +132,17 @@ impl RokuActor {
                             }
                             self.poll_volume(&client, &base, &mut last).await;
                         }
-                        DeviceCmd::Play | DeviceCmd::Pause => { let _ = keypress(&client, &base, "Play").await; }
+                        DeviceCmd::Play | DeviceCmd::Pause => {
+                            // Our player channel takes explicit pause/play; other apps
+                            // only have the Play key, which toggles.
+                            let active = get_text(&client, &format!("{base}/query/active-app")).await.unwrap_or_default();
+                            if active.contains(r#"id="dev""#) {
+                                let action = if matches!(cmd, DeviceCmd::Play) { "play" } else { "pause" };
+                                let _ = client.post(format!("{base}/input?control={action}")).send().await;
+                            } else {
+                                let _ = keypress(&client, &base, "Play").await;
+                            }
+                        }
                         DeviceCmd::Next => { let _ = keypress(&client, &base, "Fwd").await; }
                         DeviceCmd::Prev => { let _ = keypress(&client, &base, "Rev").await; }
                         DeviceCmd::Refresh => {

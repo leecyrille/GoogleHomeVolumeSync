@@ -399,13 +399,13 @@ fn unix_ms() -> i64 {
 fn queue_load(items: &[CastItem]) -> Value {
     let items: Vec<Value> = items.iter().map(|it| {
         let mut media = media_json(it);
-        let mut item = json!({ "media": media.clone(), "autoplay": true, "preloadTime": 10 });
+        let mut item = json!({ "media": media.clone(), "autoplay": it.autoplay, "preloadTime": 10 });
         if let Some(sub) = &it.subtitles {
             media["tracks"] = json!([{
                 "trackId": 1, "type": "TEXT", "trackContentId": sub, "trackContentType": "text/vtt",
                 "subtype": "SUBTITLES", "name": "Subtitles", "language": "en-US"
             }]);
-            item = json!({ "media": media, "autoplay": true, "preloadTime": 10, "activeTrackIds": [1] });
+            item = json!({ "media": media, "autoplay": it.autoplay, "preloadTime": 10, "activeTrackIds": [1] });
         }
         item
     }).collect();
