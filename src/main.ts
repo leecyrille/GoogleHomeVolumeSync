@@ -566,8 +566,10 @@ function deviceCard(d: Device, stale: boolean): string {
     ? `<div class="media-info">${d.media.state === "PLAYING" ? `<span class="playing">▶ Playing</span>` : d.media.state === "PAUSED" ? "⏸ Paused" : d.media.state}
        ${d.media.title ? " — " + esc(d.media.title) : ""}${d.media.artist ? " · " + esc(d.media.artist) : ""}${d.media.app ? ` <span class="via">${esc(d.media.app)}</span>` : ""}</div>`
     : "";
+  const remote = d.backend === "roku" && d.tv;
   return `
-  <div class="card compact ${d.online ? "" : "offline"}" data-id="${esc(d.id)}">
+  <div class="card compact ${d.online ? "" : "offline"} ${remote ? "has-remote" : ""}" data-id="${esc(d.id)}">
+    <div class="card-body">
     <div class="row">
       <span class="dot ${d.online ? "on" : ""}" title="${d.online ? "Online" : "Offline"}"></span>
       <div class="dev-id" title="${esc(d.friendly_name)} · ${esc(d.model)} · ${esc(d.ip)}">
@@ -592,6 +594,8 @@ function deviceCard(d: Device, stale: boolean): string {
     </div>
     ${d.tv ? tvRow(d) : ""}
     ${media}
+    </div>
+    ${remote ? rokuRemote() : ""}
   </div>`;
 }
 
@@ -692,14 +696,13 @@ const ICON: Record<string, string> = {
   playpause: `<svg viewBox="0 0 30 24"><path d="M3 6.5v11l8.5-5.5z" fill="currentColor"/><rect x="15" y="6.5" width="3.4" height="11" rx="0.6" fill="currentColor"/><rect x="21" y="6.5" width="3.4" height="11" rx="0.6" fill="currentColor"/></svg>`,
 };
 
-/** A Roku remote laid out wide: Back / Home, the blue pad, replay / sleep / options, then transport. */
+/** A Roku remote: Back / Home, the blue pad, replay / sleep / options, and transport. */
 function rokuRemote(): string {
   const k = (key: string, icon: string, title: string, cls = "") =>
     `<button class="rk ${cls}" data-key="${key}" title="${title}" aria-label="${title}">${ICON[icon]}</button>`;
   return `
     <div class="rremote" aria-label="Remote control">
-      <div class="rmid">
-      <div class="rcol">${k("Back", "back", "Back")}${k("Home", "home", "Home")}</div>
+      <div class="rrow two">${k("Back", "back", "Back")}${k("Home", "home", "Home")}</div>
       <div class="rpad">
         <div class="rpad-v"></div><div class="rpad-h"></div>
         <button class="rpad-btn up" data-key="Up" title="Up" aria-label="Up">${ICON.up}</button>
@@ -708,19 +711,18 @@ function rokuRemote(): string {
         <button class="rpad-btn right" data-key="Right" title="Right" aria-label="Right">${ICON.right}</button>
         <button class="rpad-ok" data-key="Select" title="OK">OK</button>
       </div>
-      <div class="rcol">
+      <div class="rrow three">
         ${k("InstantReplay", "replay", "Instant replay")}
         <button class="rk" disabled title="Sleep timer: Roku only allows setting this from the remote itself">${ICON.sleep}</button>
         ${k("Info", "options", "Options (✱)")}
       </div>
-      </div>
-      <div class="rrow transport">
+      <div class="rrow three transport">
         ${k("Rev", "rew", "Rewind")}${k("Play", "playpause", "Play / Pause", "wide")}${k("Fwd", "ff", "Fast forward")}
       </div>
     </div>`;
 }
 
-/** Screen status, inputs, playback and (for Roku) a remote, beside each other. */
+/** Screen status, power, inputs and playback for a TV or projector. */
 function tvRow(d: Device): string {
   const tv = d.tv;
   if (!tv) return "";
@@ -746,9 +748,8 @@ function tvRow(d: Device): string {
   const recal = d.backend === "roku" && !tv.exact_volume
     ? `<button class="btn" data-act="recal" title="This TV doesn't report its volume, so the app estimates it. Recalibrate re-zeros that estimate on the next change.">Recalibrate volume</button>` : "";
   const actions = `${inputs}${playButtons(d)}${recal}`;
-  const isRoku = d.backend === "roku";
   return `
-    <div class="tv-area ${isRoku ? "" : "noremote"}">
+    <div class="tv-area">
       <div class="tv-main">
         <div class="tv-head">
           <div class="tv-icon ${off ? "off" : ""}">${!off && tv.showing_icon ? `<img src="${esc(tv.showing_icon)}" alt="">` : `<span>${off ? "⏻" : "▭"}</span>`}</div>
@@ -767,7 +768,6 @@ function tvRow(d: Device): string {
           <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}
         ${setupPanel(d)}
       </div>
-      ${isRoku ? rokuRemote() : ""}
     </div>`;
 }
 

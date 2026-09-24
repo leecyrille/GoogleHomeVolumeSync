@@ -314,26 +314,24 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .side-sync .btn.mini { margin-top: 6px; }
 
 /* ---- TV area: controls left, remote right ---- */
-.tv-area {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: start;
-  margin: 12px 0 4px 19px; padding-top: 12px; border-top: 1px solid var(--border);
-}
-.tv-area.noremote { grid-template-columns: minmax(0, 1fr); }
+.tv-area { margin: 12px 0 4px 19px; padding-top: 12px; border-top: 1px solid var(--border); }
+/* Roku cards: the remote fills the top-right corner, the rest of the card sits to its left. */
+.card.has-remote { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; padding-top: 10px; padding-bottom: 10px; }
+.card-body { min-width: 0; }
 .tv-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .tv-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tv-line select { padding: 6px 9px; min-width: 150px; }
 
 /* ---- Roku-style remote ---- */
 .rremote {
-  padding: 14px 16px 16px; border-radius: 34px;
+  width: 160px; padding: 16px 14px 18px; border-radius: 38px;
   background: #141416; border: 1px solid #26262a;
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   box-shadow: 0 10px 24px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.05);
 }
 .rrow { display: flex; justify-content: center; gap: 10px; width: 100%; }
-.rmid { display: flex; align-items: center; gap: 12px; }
-.rcol { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
-.rcol .rk { width: 40px; min-width: 0; padding: 0; border-radius: 12px; }
+.rrow.two .rk { width: 58px; border-radius: 13px; }
+.rrow.three .rk { width: 40px; min-width: 0; padding: 0; }
 .rk {
   display: grid; place-items: center; height: 32px; min-width: 42px; padding: 0 10px;
   background: #2b2b2f; color: #e9e9ec; border: none; border-radius: 12px; cursor: pointer;
@@ -344,7 +342,7 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .rk:hover { background: #36363b; }
 .rk:active { transform: translateY(1px); box-shadow: 0 1px 0 #0a0a0b; }
 .rk:disabled { opacity: .35; cursor: not-allowed; }
-.rrow.transport .rk { width: 40px; min-width: 0; padding: 0; height: 36px; }
+.rrow.transport .rk { height: 36px; }
 .rrow.transport .rk.wide { width: 58px; }
 .rrow.transport .rk.wide svg { width: 26px; }
 
