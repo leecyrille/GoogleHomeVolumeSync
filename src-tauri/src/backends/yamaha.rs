@@ -62,6 +62,7 @@ impl YamahaActor {
                                         image: pb["albumart_url"].as_str()
                                             .filter(|s| !s.is_empty())
                                             .map(|p| if p.starts_with("http") { p.to_string() } else { format!("http://{}{}", self.ip, p) }),
+                                        ..Default::default()
                                     })
                                 } else { None };
                                 let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media }).await;
@@ -79,7 +80,7 @@ impl YamahaActor {
                 cmd = self.cmd_rx.recv() => {
                     let cmd = match cmd { Some(c) => c, None => return };
                     if matches!(cmd, DeviceCmd::Shutdown) { return; }
-                    if matches!(cmd, DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync) { continue; }
+                    if matches!(cmd, DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Cast(_)) { continue; }
                     info!(id=%self.id, name=%self.name, ?cmd, "yamaha: sending command");
                     let url = match cmd {
                         DeviceCmd::SetVolume(level) => {
@@ -92,7 +93,7 @@ impl YamahaActor {
                         DeviceCmd::Next => format!("{base}/netusb/setPlayback?playback=next"),
                         DeviceCmd::Prev => format!("{base}/netusb/setPlayback?playback=previous"),
                         DeviceCmd::Refresh => format!("{base}/main/getStatus"),
-                        DeviceCmd::Shutdown | DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync => unreachable!(),
+                        DeviceCmd::Shutdown | DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Cast(_) => unreachable!(),
                     };
                     let _ = get_json(&client, &url).await;
                 }

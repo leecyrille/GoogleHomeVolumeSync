@@ -101,6 +101,11 @@ pub fn content_type(path: &Path) -> &'static str {
         Some("ts") => "video/mp2t",
         Some("mp3") => "audio/mpeg",
         Some("m4a") => "audio/mp4",
+        Some("aac") => "audio/aac",
+        Some("flac") => "audio/flac",
+        Some("wav") => "audio/wav",
+        Some("ogg" | "opus") => "audio/ogg",
+        Some("m3u8") => "application/x-mpegURL",
         Some("srt") => "application/x-subrip",
         Some("vtt") => "text/vtt",
         _ => "application/octet-stream",
@@ -173,7 +178,7 @@ async fn handle(mut sock: TcpStream, peer: std::net::IpAddr) -> std::io::Result<
         "HTTP/1.1 200 OK\r\n".to_string()
     };
     header += &format!(
-        "Content-Type: {}\r\nContent-Length: {body_len}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+        "Content-Type: {}\r\nContent-Length: {body_len}\r\nAccept-Ranges: bytes\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
         content_type(&path)
     );
     sock.write_all(header.as_bytes()).await?;
@@ -184,4 +189,30 @@ async fn handle(mut sock: TcpStream, peer: std::net::IpAddr) -> std::io::Result<
     let mut limited = file.take(body_len);
     tokio::io::copy(&mut limited, &mut sock).await?;
     Ok(())
+}
+
+/// Cast devices only show WebVTT subtitles: convert an .srt next to the video
+/// into a temporary .vtt file (a .vtt is returned as-is).
+pub fn subtitles_as_vtt(sub: &Path) -> Option<PathBuf> {
+    let is_vtt = sub.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("vtt")).unwrap_or(false);
+    if is_vtt {
+        return Some(sub.to_path_buf());
+    }
+    let text = std::fs::read_to_string(sub).ok()?;
+    let text = text.trim_start_matches('\u{feff}');
+    let mut out = String::from("WEBVTT\n\n");
+    for line in text.lines() {
+        // 00:00:01,234 --> 00:00:03,000  becomes  00:00:01.234 --> 00:00:03.000
+        if line.contains("-->") {
+            out.push_str(&line.replace(',', "."));
+        } else {
+            out.push_str(line);
+        }
+        out.push('\n');
+    }
+    let dir = std::env::temp_dir().join("volume-sync-subtitles");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(format!("{}.vtt", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&path, out).ok()?;
+    Some(path)
 }

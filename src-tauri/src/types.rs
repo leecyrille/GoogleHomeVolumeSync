@@ -22,6 +22,24 @@ pub struct MediaInfo {
     /// Artwork URL, when the source provides one.
     #[serde(default)]
     pub image: Option<String>,
+    /// Playback position and length, when the source reports them.
+    #[serde(default)]
+    pub position_ms: Option<u64>,
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+    /// When position_ms was read (unix ms), so the UI can advance it.
+    #[serde(default)]
+    pub position_at: Option<i64>,
+}
+
+/// A file or link to play on a Google Cast device (Default Media Receiver).
+#[derive(Clone, Debug)]
+pub struct CastItem {
+    pub url: String,
+    pub title: String,
+    pub content_type: String,
+    /// WebVTT subtitles URL.
+    pub subtitles: Option<String>,
 }
 
 /// Snapshot of a device sent to the frontend and persisted (metadata parts).
@@ -74,6 +92,8 @@ pub enum DeviceCmd {
     Seek(u64),
     /// Re-read everything now (e.g. right after installing the player channel).
     Resync,
+    /// Play these on a Google Cast device, in order.
+    Cast(Vec<CastItem>),
     Shutdown,
 }
 

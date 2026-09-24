@@ -287,3 +287,11 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .setup-pw { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: middle; }
 .setup-pw input { width: 180px; }
 .setup-msg { margin: 6px 0; padding: 6px 10px; border-radius: 6px; background: #1b2533; color: var(--text); }
+
+/* ---- cast media panel / sidebar progress ---- */
+.cast-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -4px 0 14px; padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
+.cast-panel label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); }
+.cast-panel .hint { flex-basis: 100%; margin-top: 0; }
+.side-prog { margin-top: 6px; }
+.side-prog input[type="range"] { width: 100%; height: 4px; }
+.side-times { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; margin-top: 2px; }

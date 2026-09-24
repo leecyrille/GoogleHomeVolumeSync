@@ -147,6 +147,7 @@ impl RokuActor {
                             tokio::time::sleep(Duration::from_millis(1500)).await;
                             self.poll_status(&client, &base, &mut online, &mut last).await;
                         }
+                        DeviceCmd::Cast(_) => {}
                         DeviceCmd::Resync => {
                             last.inputs_at = None;
                             self.poll_status(&client, &base, &mut online, &mut last).await;
@@ -318,6 +319,7 @@ impl RokuActor {
             supports_transport: true,
             album: None,
             image: showing_icon,
+            ..Default::default()
         });
         let changed = match (&media, &last.media) {
             (Some(a), Some(b)) => a.state != b.state || a.app != b.app,

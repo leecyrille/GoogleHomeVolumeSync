@@ -2,7 +2,7 @@
 //! receiver (volume) + media (transport) channels, auto-reconnect.
 
 use super::proto::*;
-use crate::types::{CoreEvent, DeviceCmd, MediaInfo};
+use crate::types::{CastItem, CoreEvent, DeviceCmd, MediaInfo};
 use prost::Message;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -34,7 +34,12 @@ struct SessionState {
     media_session_id: Option<i64>,
     app_name: Option<String>,
     track: Track,
+    /// Items waiting for the Default Media Receiver to start.
+    pending_cast: Option<Vec<CastItem>>,
 }
+
+/// Google's Default Media Receiver: plays a URL on any Cast device.
+const DEFAULT_MEDIA_RECEIVER: &str = "CC1AD845";
 
 #[derive(Default)]
 struct Track {
@@ -42,6 +47,7 @@ struct Track {
     artist: Option<String>,
     album: Option<String>,
     image: Option<String>,
+    duration_ms: Option<u64>,
 }
 
 impl CastActor {
@@ -98,7 +104,7 @@ impl CastActor {
     /// Returns true if the actor should shut down permanently.
     async fn session(&mut self, stream: Stream) -> bool {
         let (mut rd, mut wr) = tokio::io::split(stream);
-        let mut state = SessionState { media_transport_id: None, media_session_id: None, app_name: None, track: Track::default() };
+        let mut state = SessionState { media_transport_id: None, media_session_id: None, app_name: None, track: Track::default(), pending_cast: None };
 
         if send(&mut wr, &self.id, "receiver-0", NS_CONNECTION, &json!({"type":"CONNECT"})).await.is_err() {
             return false;
@@ -140,7 +146,7 @@ impl CastActor {
                 cmd = self.cmd_rx.recv() => {
                     let cmd = match cmd { Some(c) => c, None => return true };
                     if matches!(cmd, DeviceCmd::Shutdown) { return true; }
-                    if self.handle_cmd(cmd, &mut wr, &state).await.is_err() { return false; }
+                    if self.handle_cmd(cmd, &mut wr, &mut state).await.is_err() { return false; }
                 }
             }
         }
@@ -150,7 +156,7 @@ impl CastActor {
         &self,
         cmd: DeviceCmd,
         wr: &mut WriteHalf<Stream>,
-        state: &SessionState,
+        state: &mut SessionState,
     ) -> std::io::Result<()> {
         info!(id=%self.id, name=%self.name, ?cmd, "cast: sending command");
         match cmd {
@@ -179,7 +185,20 @@ impl CastActor {
                 };
                 send(wr, &self.id, tid, NS_MEDIA, &payload).await
             }
-            DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Shutdown => Ok(()),
+            DeviceCmd::Seek(ms) => {
+                let (Some(tid), Some(msid)) = (state.media_transport_id.as_ref(), state.media_session_id) else {
+                    return Ok(());
+                };
+                send(wr, &self.id, tid, NS_MEDIA,
+                    &json!({"type":"SEEK","requestId":next_req_id(),"mediaSessionId":msid,"currentTime": ms as f64 / 1000.0})).await
+            }
+            DeviceCmd::Cast(items) => {
+                // Start the Default Media Receiver; the queue is loaded once it reports running.
+                state.pending_cast = Some(items);
+                send(wr, &self.id, "receiver-0", NS_RECEIVER,
+                    &json!({"type":"LAUNCH","requestId":next_req_id(),"appId":DEFAULT_MEDIA_RECEIVER})).await
+            }
+            DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Resync | DeviceCmd::Shutdown => Ok(()),
         }
     }
 
@@ -229,6 +248,12 @@ impl CastActor {
                             let _ = send(wr, &self.id, &tid, NS_CONNECTION, &json!({"type":"CONNECT"})).await;
                             let _ = send(wr, &self.id, &tid, NS_MEDIA, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await;
                         }
+                        if app["appId"].as_str() == Some(DEFAULT_MEDIA_RECEIVER) && !tid.is_empty() {
+                            if let Some(items) = state.pending_cast.take() {
+                                info!(id=%self.id, name=%self.name, count = items.len(), "cast: loading queue");
+                                let _ = send(wr, &self.id, &tid, NS_MEDIA, &queue_load(&items)).await;
+                            }
+                        }
                     }
                     None => {
                         state.app_name = None;
@@ -251,6 +276,9 @@ impl CastActor {
                     state.media_session_id = session;
                     // Most status updates omit "media"; only the ones sent on a
                     // track change carry metadata, so keep the last known track.
+                    if let Some(d) = s["media"]["duration"].as_f64().filter(|d| *d > 0.0) {
+                        state.track.duration_ms = Some((d * 1000.0) as u64);
+                    }
                     let meta = &s["media"]["metadata"];
                     if meta.is_object() {
                         let text = |k: &str| meta[k].as_str().filter(|t| !t.is_empty()).map(String::from);
@@ -262,8 +290,10 @@ impl CastActor {
                                 .and_then(|imgs| imgs.first())
                                 .and_then(|i| i["url"].as_str())
                                 .map(String::from),
+                            duration_ms: state.track.duration_ms,
                         };
                     }
+                    let position_ms = s["currentTime"].as_f64().map(|t| (t * 1000.0) as u64);
                     let media = MediaInfo {
                         state: s["playerState"].as_str().unwrap_or("IDLE").to_string(),
                         title: state.track.title.clone(),
@@ -272,6 +302,9 @@ impl CastActor {
                         supports_transport: true,
                         album: state.track.album.clone(),
                         image: state.track.image.clone(),
+                        position_ms,
+                        duration_ms: state.track.duration_ms,
+                        position_at: position_ms.map(|_| unix_ms()),
                     };
                     debug!(id=%self.id, name=%self.name, state=%media.state, title=?media.title, "cast: media status");
                     let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media: Some(media) }).await;
@@ -332,4 +365,32 @@ async fn read_frame(rd: &mut ReadHalf<Stream>) -> std::io::Result<CastMessage> {
     rd.read_exact(&mut buf).await?;
     CastMessage::decode(buf.as_slice())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+fn unix_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+/// QUEUE_LOAD for the Default Media Receiver, with WebVTT subtitles when given.
+fn queue_load(items: &[CastItem]) -> Value {
+    let items: Vec<Value> = items.iter().map(|it| {
+        let music = it.content_type.starts_with("audio/");
+        let mut media = json!({
+            "contentId": it.url,
+            "contentUrl": it.url,
+            "contentType": it.content_type,
+            "streamType": "BUFFERED",
+            "metadata": { "metadataType": if music { 3 } else { 0 }, "title": it.title },
+        });
+        let mut item = json!({ "media": media.clone(), "autoplay": true, "preloadTime": 10 });
+        if let Some(sub) = &it.subtitles {
+            media["tracks"] = json!([{
+                "trackId": 1, "type": "TEXT", "trackContentId": sub, "trackContentType": "text/vtt",
+                "subtype": "SUBTITLES", "name": "Subtitles", "language": "en-US"
+            }]);
+            item = json!({ "media": media, "autoplay": true, "preloadTime": 10, "activeTrackIds": [1] });
+        }
+        item
+    }).collect();
+    json!({ "type": "QUEUE_LOAD", "requestId": next_req_id(), "items": items, "startIndex": 0, "repeatMode": "REPEAT_OFF" })
 }

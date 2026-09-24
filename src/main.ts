@@ -17,6 +17,9 @@ interface MediaInfo {
   supports_transport: boolean;
   album?: string;
   image?: string;
+  position_ms?: number | null;
+  duration_ms?: number | null;
+  position_at?: number | null;
 }
 interface Device {
   id: string;
@@ -170,6 +173,11 @@ function renderSide() {
             <div class="side-sub">${playing ? "" : "Paused · "}${esc(displayName(d))}</div>
           </div>
         </div>
+        ${m.duration_ms && m.position_ms != null ? `
+        <div class="side-prog" data-sprog="${esc(d.id)}">
+          <input type="range" min="0" max="${m.duration_ms}" step="1000" value="${Math.round(mediaPos(m))}" data-sseek title="Drag to jump to a point">
+          <div class="side-times"><span data-spos>${fmtTime(mediaPos(m))}</span><span>${fmtTime(m.duration_ms)}</span></div>
+        </div>` : ""}
         <div class="side-ctl">
           <button class="btn icon" data-np-act="prev" title="Previous">⏮</button>
           <button class="btn icon" data-np-act="${playing ? "pause" : "play"}" title="${playing ? "Pause" : "Play"}">${playing ? "⏸" : "▶"}</button>
@@ -191,6 +199,17 @@ function renderSide() {
     el.querySelectorAll<HTMLElement>("[data-np-act]").forEach((b) =>
       b.addEventListener("click", () => invoke("media_cmd", { id, action: b.dataset.npAct })));
     el.querySelector<HTMLImageElement>("img.side-art")?.addEventListener("error", (e) => (e.target as HTMLElement).remove());
+    const seek = el.querySelector<HTMLInputElement>("[data-sseek]");
+    if (seek) {
+      const key = "side:seek:" + id;
+      const posEl = el.querySelector<HTMLElement>("[data-spos]")!;
+      seek.addEventListener("pointerdown", () => dragging.add(key));
+      seek.addEventListener("input", () => { posEl.textContent = fmtTime(Number(seek.value)); });
+      seek.addEventListener("change", () => {
+        invoke("seek", { id, positionMs: Number(seek.value) });
+        setTimeout(() => { dragging.delete(key); renderSide(); renderIfPending(); }, 1200);
+      });
+    }
   });
 
   sideEl.querySelectorAll<HTMLElement>(".vcol").forEach((col) => {
@@ -226,6 +245,53 @@ function sideDragging(): boolean {
   return [...dragging].some((k) => k.startsWith("side:"));
 }
 
+// ---------------- cast media (files / links) ----------------
+
+let castPanelOpen = false;
+let castTarget = "";
+const CAST_VIDEO = ["mp4", "m4v", "webm", "mkv", "mov"];
+const CAST_AUDIO = ["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"];
+
+/** Devices that can play files: any Google Cast device or group, and Roku TVs with the player set up. */
+function castTargets(): Device[] {
+  return state.devices.filter((d) => d.online && (d.backend === "cast" || (d.backend === "roku" && d.tv?.player_ready)));
+}
+
+function castPanel(): string {
+  const targets = castTargets();
+  if (!targets.some((d) => d.id === castTarget)) castTarget = targets[0]?.id ?? "";
+  const label = (d: Device) => `${displayName(d)}${d.is_cast_group ? " (group)" : d.backend === "roku" ? " (Roku)" : ""}`;
+  return `
+    <div class="cast-panel">
+      <label>Play on
+        <select id="cast-target">${targets.map((d) => `<option value="${esc(d.id)}" ${d.id === castTarget ? "selected" : ""}>${esc(label(d))}</option>`).join("")}</select>
+      </label>
+      <button class="btn" id="cast-files" ${targets.length ? "" : "disabled"}>Choose files…</button>
+      <button class="btn" id="cast-link" ${targets.length ? "" : "disabled"}>Play a link…</button>
+      <div class="hint">Video goes to TVs, Nest Hubs and Chromecasts; music plays on any speaker or speaker group. Several files play in order, and a same-named .srt or .vtt next to a video becomes subtitles. Files are shared only with the device you pick, for 12 hours.</div>
+    </div>`;
+}
+
+function wireCastPanel() {
+  const sel = document.getElementById("cast-target") as HTMLSelectElement | null;
+  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); });
+  document.getElementById("cast-files")?.addEventListener("click", async () => {
+    const d = state.devices.find((x) => x.id === castTarget);
+    if (!d) return;
+    const exts = d.backend === "roku" ? VIDEO_EXTS : [...CAST_VIDEO, ...CAST_AUDIO];
+    const picked = await open({ multiple: true, filters: [{ name: "Video and music", extensions: exts }] });
+    const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
+    if (paths.length === 0) return;
+    try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
+  });
+  document.getElementById("cast-link")?.addEventListener("click", async () => {
+    if (!castTarget) return;
+    const url = prompt("Video or music link (MP4, MP3, MKV, WebM or an M3U8 live stream):");
+    if (!url) return;
+    try { await invoke("play_url", { id: castTarget, url }); } catch (e) { alert(String(e)); }
+  });
+}
+
 // ---------------- devices view ----------------
 
 function renderDevices() {
@@ -235,7 +301,9 @@ function renderDevices() {
     <div class="toolbar">
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
+      <button class="btn primary" id="cast-media">▶ Cast media…</button>
     </div>
+    ${castPanelOpen ? castPanel() : ""}
     ${section("Roku TVs", state.devices.filter((d) => d.backend === "roku"), stale)}
     ${section("Other Devices", state.devices.filter((d) => !["cast", "roku"].includes(d.backend)), stale)}
     ${section("Google Devices", state.devices.filter((d) => !d.is_cast_group && d.backend === "cast"), stale)}
@@ -252,6 +320,8 @@ function renderDevices() {
     setTimeout(() => { btn.disabled = false; btn.textContent = "Scan for Roku TVs"; }, 2500);
   });
   document.getElementById("add-manual")!.addEventListener("click", showAddManual);
+  document.getElementById("cast-media")!.addEventListener("click", () => { castPanelOpen = !castPanelOpen; render(); });
+  wireCastPanel();
 
   for (const d of state.devices) wireDeviceCard(d);
 }
@@ -313,6 +383,13 @@ function fmtTime(ms: number): string {
   const t = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** A cast session's position now, advanced since its last status while playing. */
+function mediaPos(m: MediaInfo): number {
+  const base = m.position_ms ?? 0;
+  if (!(m.state === "PLAYING") || !m.position_at) return base;
+  return Math.min(m.duration_ms ?? Infinity, base + (Date.now() - m.position_at));
 }
 
 /** Position now, advanced from the last poll while playing. */
@@ -800,6 +877,7 @@ function renderSettings() {
       <div class="credits-title">Open-source credits</div>
       <p class="credits">Built with <b>Tauri</b>, <b>Tokio</b>, <b>Serde</b>, <b>mdns-sd</b>, <b>prost</b>, <b>reqwest</b>, <b>rustls</b>, <b>native-tls</b>, <b>tungstenite</b>, <b>tracing</b> and <b>chrono</b>, plus about 350 other open-source packages. Thank you to everyone who maintains them.</p>
       <p class="credits">The Google Cast message format comes from Chromium's <i>cast_channel.proto</i> (BSD-3-Clause, The Chromium Authors). Roku control follows Roku's published External Control Protocol documentation.</p>
+      <p class="credits">Casting files and links, queues and subtitles were inspired by <b>Web Video Caster</b> (webvideocaster.com), which does this across many kinds of devices. Volume Sync isn't affiliated with it and uses none of its code.</p>
       <div class="support-row" style="margin-top:10px"><button class="btn" id="open-notices">View all licenses</button></div>
     </div>`;
   document.getElementById("open-notices")!.addEventListener("click", () => invoke("open_notices"));
@@ -910,8 +988,17 @@ async function maybeCheckUpdates() {
 document.getElementById("nav-donate")?.addEventListener("click", () => openUrl(DONATE_URL));
 document.getElementById("nav-site")?.addEventListener("click", () => openUrl(SITE_URL));
 
-// Keep Roku progress bars moving between polls.
+// Keep progress bars moving between status updates.
 setInterval(() => {
+  document.querySelectorAll<HTMLElement>("[data-sprog]").forEach((el) => {
+    const d = state.devices.find((x) => x.id === el.dataset.sprog);
+    if (!d?.media || dragging.has("side:seek:" + d.id)) return;
+    const pos = mediaPos(d.media);
+    const input = el.querySelector<HTMLInputElement>("[data-sseek]");
+    if (input) input.value = String(Math.round(pos));
+    const t = el.querySelector<HTMLElement>("[data-spos]");
+    if (t) t.textContent = fmtTime(pos);
+  });
   document.querySelectorAll<HTMLElement>("[data-prog]").forEach((el) => {
     const d = state.devices.find((x) => x.id === el.dataset.prog);
     if (!d?.tv || dragging.has("seek:" + d.id)) return;

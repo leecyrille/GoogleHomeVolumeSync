@@ -114,12 +114,55 @@ async fn tv_ready(core: &Core, id: &str) -> Result<String, String> {
     Ok(ip)
 }
 
+/// Files a Google Cast device's Default Media Receiver can play.
+const CAST_EXTS: &[&str] = &["mp4", "m4v", "webm", "mkv", "mov", "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"];
+
+fn device_backend(core: &Core, id: &str) -> Result<(Backend, String), String> {
+    let inner = core.inner.lock().unwrap();
+    let e = inner.devices.get(id).ok_or("Unknown device.")?;
+    Ok((e.info.backend, e.info.ip.clone()))
+}
+
+/// Play files on a Google Cast device: shared from this PC, queued in order.
+async fn cast_files(core: &Core, id: &str, ip: &str, paths: &[std::path::PathBuf]) -> Result<(), String> {
+    let unsupported: Vec<String> = paths.iter()
+        .filter(|p| !p.extension().and_then(|e| e.to_str()).map(|e| CAST_EXTS.contains(&e.to_ascii_lowercase().as_str())).unwrap_or(false))
+        .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from)).collect();
+    if !unsupported.is_empty() {
+        return Err(format!("Cast devices play MP4, WebM, MKV and MOV video and MP3, M4A, AAC, FLAC, WAV and OGG audio. Not supported: {}", unsupported.join(", ")));
+    }
+    let mut items = Vec::new();
+    for p in paths {
+        let content_type = crate::media_server::content_type(p).to_string();
+        let subtitles = if content_type.starts_with("video/") {
+            match crate::backends::roku_player::sidecar_subtitles(p).and_then(|s| crate::media_server::subtitles_as_vtt(&s)) {
+                Some(vtt) => Some(crate::media_server::share(&vtt, ip).await?),
+                None => None,
+            }
+        } else {
+            None
+        };
+        items.push(crate::types::CastItem {
+            url: crate::media_server::share(p, ip).await?,
+            title: p.file_stem().and_then(|s| s.to_str()).unwrap_or("Media").to_string(),
+            content_type,
+            subtitles,
+        });
+    }
+    core.send_cmd(id, DeviceCmd::Cast(items));
+    Ok(())
+}
+
 /// Play one or more files from this PC, in order, with subtitles found next to them.
 #[tauri::command]
 pub async fn play_files(core: CoreState<'_>, id: String, paths: Vec<String>) -> Result<(), String> {
     use crate::backends::roku_player::{sidecar_subtitles, stream_format, Item};
-    info!(id=%id, count = paths.len(), "ui: play files on TV");
+    info!(id=%id, count = paths.len(), "ui: play files");
     let paths: Vec<std::path::PathBuf> = paths.into_iter().map(std::path::PathBuf::from).collect();
+    let (backend, cast_ip) = device_backend(&core, &id)?;
+    if backend == Backend::Cast {
+        return cast_files(&core, &id, &cast_ip, &paths).await;
+    }
     let unsupported: Vec<String> = paths.iter().filter(|p| stream_format(p).is_none())
         .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from)).collect();
     if !unsupported.is_empty() {
@@ -152,7 +195,18 @@ pub async fn play_url(core: CoreState<'_>, id: String, url: String) -> Result<()
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err("That doesn't look like a web link (it should start with http:// or https://).".into());
     }
-    info!(id=%id, %url, "ui: play link on TV");
+    info!(id=%id, %url, "ui: play link");
+    let (backend, _) = device_backend(&core, &id)?;
+    if backend == Backend::Cast {
+        let lower = url.split(['?', '#']).next().unwrap_or(&url).to_ascii_lowercase();
+        let content_type = if lower.ends_with(".m3u8") { "application/x-mpegURL" }
+            else if lower.ends_with(".mp3") { "audio/mpeg" }
+            else if lower.ends_with(".webm") { "video/webm" }
+            else { "video/mp4" };
+        let title = url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).filter(|t| !t.is_empty()).unwrap_or("Media").to_string();
+        core.send_cmd(&id, DeviceCmd::Cast(vec![crate::types::CastItem { url, title, content_type: content_type.into(), subtitles: None }]));
+        return Ok(());
+    }
     let ip = tv_ready(&core, &id).await?;
     let title = url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).filter(|t| !t.is_empty()).unwrap_or("Video").to_string();
     let item = Item { fmt: stream_format_for_url(&url), url, title, subtitles: None };

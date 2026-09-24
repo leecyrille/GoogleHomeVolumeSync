@@ -31,6 +31,7 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 - **Sync groups**: put any devices in a group and control them with one slider; if one member's volume changes — in the app, in the Google Home app, or on the speaker itself — the others are forced to match.
 - **Sync Gain** (0–200% per device): balance rooms against each other. A device at 50% gain sits at half the group's level and reports its own changes back at double, so groups stay consistent while quiet or loud rooms are corrected.
 - **Now Casting** in the sidebar: track, artist and artwork for whatever is casting, with play / pause / next / previous and a vertical volume slider per sync group involved (collapses to one averaged slider when more than six are in play).
+- **Cast media**: play video or music files from your PC, or a link, on any Google Cast device (video on Nest Hubs and Chromecasts, music on speakers and groups), with queues, subtitles from a matching .srt/.vtt, and a draggable progress bar. Roku TVs can do the same after a one-time developer-mode setup that installs a small player channel. Files are served only to the device you pick, for 12 hours.
 - **Scheduler**: weekly events (day-of-week checkboxes + time) that set volumes on devices or groups; each event has an enable checkbox.
 - **System tray**: right-click to see what's playing and control it, and set a sync group's volume in 5% steps (straight in the first menu when you have one sync group). Open App / Exit. Close button hides to tray.
 - **Custom names** for devices and groups.
@@ -65,6 +66,7 @@ This app stands on a lot of open-source work. The main pieces:
 - [mdns-sd](https://github.com/keepsimple1/mdns-sd) for finding Cast devices, [prost](https://github.com/tokio-rs/prost) for the Cast wire format, [rustls](https://github.com/rustls/rustls) and [native-tls](https://github.com/sfackler/rust-native-tls) for the encrypted connections
 - The Google Cast message definition mirrors Chromium's `cast_channel.proto` (BSD-3-Clause, The Chromium Authors)
 - Roku control follows Roku's published [External Control Protocol](https://developer.roku.com/docs/developer-program/dev-tools/external-control-api.md) documentation
+- Casting files and links, queues and subtitles were inspired by [Web Video Caster](https://www.webvideocaster.com/). Volume Sync isn't affiliated with it and uses none of its code.
 
 Every component shipped in the app, about 360 in total, is listed with its full license text in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). The app also shows it under **Settings → View all licenses**. Regenerate it with `python tools/gen_notices.py` after changing dependencies.
 
