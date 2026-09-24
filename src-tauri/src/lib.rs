@@ -49,6 +49,9 @@ pub fn run() {
             commands::rename_device,
             commands::set_sync_gain,
             commands::delete_device,
+            commands::set_power,
+            commands::set_input,
+            commands::device_key,
             commands::recalibrate_roku,
             commands::save_groups,
             commands::set_group_volume,
@@ -61,6 +64,7 @@ pub fn run() {
             commands::scan_roku,
             commands::get_log_tail,
             commands::open_log_folder,
+            commands::open_notices,
         ])
         .setup(|app| {
             let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<types::CoreEvent>(256);

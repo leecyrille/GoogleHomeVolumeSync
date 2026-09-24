@@ -30,9 +30,9 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 - **Per-device volume sliders** with live updates (changes made on the speaker or in the Google Home app reflect immediately).
 - **Sync groups**: put any devices in a group and control them with one slider; if one member's volume changes — in the app, in the Google Home app, or on the speaker itself — the others are forced to match.
 - **Sync Gain** (0–200% per device): balance rooms against each other. A device at 50% gain sits at half the group's level and reports its own changes back at double, so groups stay consistent while quiet or loud rooms are corrected.
-- **Media controls**: play / pause / next / previous for active sessions.
+- **Now Playing** in the sidebar: track, artist and artwork for whatever is casting, with play / pause / next / previous and a vertical volume slider per sync group involved (collapses to one averaged slider when more than six are in play).
 - **Scheduler**: weekly events (day-of-week checkboxes + time) that set volumes on devices or groups; each event has an enable checkbox.
-- **System tray**: right-click → pick a group → set volume in 5% steps, or send transport commands. Open App / Exit. Close button hides to tray.
+- **System tray**: right-click to see what's playing and control it, and set a sync group's volume in 5% steps (straight in the first menu when you have one sync group). Open App / Exit. Close button hides to tray.
 - **Custom names** for devices and groups.
 - **Last seen** shown for devices offline >1 day, with a delete option (they re-add when seen again).
 - **Config export/import** (JSON).
@@ -45,7 +45,7 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 | Backend | Discovery | Volume | Hardware tested | Notes |
 |---|---|---|---|---|
 | Google Cast | automatic (mDNS) | absolute | yes | primary backend |
-| Roku TV | "Scan for Roku TVs" (SSDP) | pseudo-absolute | yes | emulated via keypress ramping with a cached level; Recalibrate button re-zeros |
+| Roku TV | "Scan for Roku TVs" (SSDP) | pseudo-absolute | yes | volume emulated via keypress ramping with a cached level (Recalibrate re-zeros); power on/off with wake-on-LAN fallback, input switching and an on-screen remote |
 | Yamaha MusicCast (e.g. RX-V581) | add by IP | absolute | **no** | Yamaha Extended Control JSON API |
 | LG webOS TV | add by IP | absolute | **no** | one-time on-screen pairing prompt |
 | Optoma projector | add by IP | absolute (0–10 range) | **no** | RS-232-over-Telnet, experimental |
@@ -55,6 +55,18 @@ The Yamaha MusicCast, LG webOS and Optoma backends are written to their publishe
 ## Support the project
 
 This app is free and open source, built by one person. If it made your house sound better, a small tip keeps it that way: **[Buy me a coffee](https://pactotech.com/products/google-home-volume-sync-tip-jar)** (tip jar on the Pacto Tech store, pick any amount).
+
+## Credits
+
+This app stands on a lot of open-source work. The main pieces:
+
+- [Tauri](https://tauri.app) for the desktop shell, installer and updater
+- [Tokio](https://tokio.rs), [Serde](https://serde.rs), [reqwest](https://github.com/seanmonstar/reqwest), [tungstenite](https://github.com/snapview/tungstenite-rs), [tracing](https://github.com/tokio-rs/tracing) and [chrono](https://github.com/chronotope/chrono)
+- [mdns-sd](https://github.com/keepsimple1/mdns-sd) for finding Cast devices, [prost](https://github.com/tokio-rs/prost) for the Cast wire format, [rustls](https://github.com/rustls/rustls) and [native-tls](https://github.com/sfackler/rust-native-tls) for the encrypted connections
+- The Google Cast message definition mirrors Chromium's `cast_channel.proto` (BSD-3-Clause, The Chromium Authors)
+- Roku control follows Roku's published [External Control Protocol](https://developer.roku.com/docs/developer-program/dev-tools/external-control-api.md) documentation
+
+Every component shipped in the app, about 360 in total, is listed with its full license text in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). The app also shows it under **Settings → View all licenses**. Regenerate it with `python tools/gen_notices.py` after changing dependencies.
 
 ## Development
 

@@ -45,6 +45,17 @@ pub struct DeviceInfo {
     /// to the group for sync purposes.
     #[serde(default = "default_gain")]
     pub sync_gain: f32,
+    /// Screen power for devices that report it (Roku TVs); None = not supported/unknown.
+    #[serde(default)]
+    pub power: Option<bool>,
+    /// What the screen is showing: an input ("HDMI 2") or an app ("Netflix").
+    #[serde(default)]
+    pub input: Option<String>,
+    #[serde(default)]
+    pub inputs: Vec<InputOption>,
+    /// For Google cast groups: the device ids of the speakers in it.
+    #[serde(default)]
+    pub members: Vec<String>,
     #[serde(default)]
     pub media: Option<MediaInfo>,
 }
@@ -59,7 +70,18 @@ pub enum DeviceCmd {
     Next,
     Prev,
     Refresh,
+    Power(bool),
+    /// An `InputOption::id`.
+    Input(String),
+    /// A remote-control key, e.g. "Home" or "Up".
+    Key(String),
     Shutdown,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct InputOption {
+    pub id: String,
+    pub label: String,
 }
 
 /// Events emitted by backend actors toward the core.
@@ -70,6 +92,8 @@ pub enum CoreEvent {
     Online { id: String, online: bool },
     /// Members of a Google cast group (normalized device ids), via multizone.
     GroupMembers { id: String, members: Vec<String> },
+    /// Power/input state from devices that report it, plus MAC addresses for wake-on-LAN.
+    DeviceStatus { id: String, power: Option<bool>, input: Option<String>, inputs: Vec<InputOption>, macs: Vec<String> },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

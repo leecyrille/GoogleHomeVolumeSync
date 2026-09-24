@@ -61,6 +61,24 @@ pub fn set_sync_gain(core: CoreState, id: String, gain: f32) {
 }
 
 #[tauri::command]
+pub fn set_power(core: CoreState, id: String, on: bool) {
+    info!(id=%id, on, "ui: set power");
+    core.send_cmd(&id, DeviceCmd::Power(on));
+}
+
+#[tauri::command]
+pub fn set_input(core: CoreState, id: String, input: String) {
+    info!(id=%id, input=%input, "ui: set input");
+    core.send_cmd(&id, DeviceCmd::Input(input));
+}
+
+#[tauri::command]
+pub fn device_key(core: CoreState, id: String, key: String) {
+    info!(id=%id, key=%key, "ui: remote key");
+    core.send_cmd(&id, DeviceCmd::Key(key));
+}
+
+#[tauri::command]
 pub fn delete_device(core: CoreState, id: String) {
     core.delete_device(&id);
 }
@@ -183,6 +201,7 @@ pub async fn scan_roku(core: CoreState<'_>) -> Result<usize, String> {
             ip,
             port: 8060,
             name: if name.is_empty() { model } else { name },
+            macs: Vec::new(),
         };
         {
             let mut inner = core.inner.lock().unwrap();
@@ -217,6 +236,17 @@ pub fn get_log_tail(lines: usize) -> Vec<String> {
     let all: Vec<&str> = text.lines().collect();
     let start = all.len().saturating_sub(lines);
     all[start..].iter().map(|s| s.to_string()).collect()
+}
+
+/// Opens THIRD-PARTY-NOTICES.txt, bundled as a resource.
+#[tauri::command]
+pub fn open_notices(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+    let path = app.path()
+        .resolve("THIRD-PARTY-NOTICES.txt", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

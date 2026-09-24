@@ -95,8 +95,12 @@ impl Core {
                 }
             }
         }
+        let by_norm: HashMap<String, String> = inner.devices.keys()
+            .map(|id| (id.to_lowercase().replace('-', ""), id.clone()))
+            .collect();
         let mut devices: Vec<DeviceInfo> = inner.devices.values().map(|e| {
             let mut info = e.info.clone();
+            info.members = e.group_members.iter().filter_map(|m| by_norm.get(m).cloned()).collect();
             if info.media.is_none() {
                 if let Some(via) = overlays.get(&info.id.to_lowercase().replace('-', "")) {
                     info.media = Some(via.clone());
@@ -153,6 +157,10 @@ impl Core {
                         muted: false,
                         can_absolute_volume: true,
                         sync_gain: 1.0,
+                        power: None,
+                        input: None,
+                        inputs: Vec::new(),
+                        members: Vec::new(),
                         media: None,
                     },
                     cmd: None,
@@ -231,6 +239,10 @@ impl Core {
                     muted: false,
                     can_absolute_volume: can_abs,
                     sync_gain: 1.0,
+                    power: None,
+                    input: None,
+                    inputs: Vec::new(),
+                    members: Vec::new(),
                     media: None,
                 },
                 cmd: None,
@@ -250,7 +262,7 @@ impl Core {
                 let cached = self.inner.lock().unwrap().cfg.roku_levels.get(&id).copied();
                 let actor = RokuActor {
                     id: id.clone(), name: m.name.clone(), ip: m.ip.clone(),
-                    cmd_rx: rx, events: self.event_tx.clone(), cached_level: cached,
+                    cmd_rx: rx, events: self.event_tx.clone(), cached_level: cached, macs: m.macs.clone(),
                 };
                 tauri::async_runtime::spawn(actor.run());
             }
@@ -513,6 +525,25 @@ impl Core {
                 drop(inner);
                 self.emit_state();
                 self.refresh_tray_if_playback_changed();
+            }
+            CoreEvent::DeviceStatus { id, power, input, inputs, macs } => {
+                let mut inner = self.inner.lock().unwrap();
+                if let Some(e) = inner.devices.get_mut(&id) {
+                    e.info.power = power;
+                    e.info.input = input;
+                    e.info.inputs = inputs;
+                }
+                let key = id.clone();
+                if let Some(m) = inner.cfg.manual_devices.iter_mut()
+                    .find(|m| format!("{:?}:{}", m.backend, m.ip).to_lowercase() == key)
+                {
+                    if !macs.is_empty() && m.macs != macs {
+                        m.macs = macs;
+                        inner.cfg_dirty = true;
+                    }
+                }
+                drop(inner);
+                self.emit_state();
             }
             CoreEvent::GroupMembers { id, members } => {
                 let mut inner = self.inner.lock().unwrap();

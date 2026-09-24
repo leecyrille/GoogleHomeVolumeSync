@@ -26,6 +26,9 @@ pub struct ManualDevice {
     pub ip: String,
     pub port: u16,
     pub name: String,
+    /// Learned from the device, for wake-on-LAN.
+    #[serde(default)]
+    pub macs: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

@@ -33,6 +33,10 @@ interface Device {
   muted: boolean;
   can_absolute_volume: boolean;
   sync_gain: number;
+  power?: boolean | null;
+  input?: string | null;
+  inputs: { id: string; label: string }[];
+  members: string[];
   media?: MediaInfo;
 }
 interface Group {
@@ -75,7 +79,10 @@ function debounce(key: string, ms: number, fn: () => void) {
 }
 
 
-// ---------------- now playing ----------------
+// ---------------- now playing (sidebar) ----------------
+
+const MAX_SLIDERS = 6;
+const sideEl = document.getElementById("np-side")!;
 
 function isPlaying(m: MediaInfo): boolean {
   return m.state === "PLAYING" || m.state === "BUFFERING";
@@ -89,41 +96,114 @@ function nowPlaying(): Device[] {
     .sort((a, b) => Number(isPlaying(b.media!)) - Number(isPlaying(a.media!)) || displayName(a).localeCompare(displayName(b)));
 }
 
-function nowPlayingPanel(): string {
-  const sessions = nowPlaying();
-  if (sessions.length === 0) return "";
+interface VolItem { kind: "group" | "device"; id: string; label: string; level: number; }
+
+/** One slider per sync group that holds a speaker in a playing session. A
+ *  session with no speaker in any sync group gets its own device slider. */
+function sideVolItems(sessions: Device[]): VolItem[] {
+  const items = new Map<string, VolItem>();
+  for (const d of sessions) {
+    const speakers = d.is_cast_group && d.members.length ? d.members : [d.id];
+    const groups = state.groups.filter((g) => g.member_ids.some((m) => speakers.includes(m)));
+    for (const g of groups) items.set("g:" + g.id, { kind: "group", id: g.id, label: g.name, level: g.group_volume });
+    if (groups.length === 0) items.set("d:" + d.id, { kind: "device", id: d.id, label: displayName(d), level: d.volume });
+  }
+  return [...items.values()];
+}
+
+function applyVol(item: VolItem, level: number) {
+  const v = Math.max(0, Math.min(1, level));
+  if (item.kind === "group") invoke("set_group_volume", { groupId: item.id, level: v });
+  else invoke("set_volume", { id: item.id, level: v });
+}
+
+function sideSlider(key: string, label: string, level: number): string {
+  const pct = Math.round(level * 100);
   return `
-    <div class="section-title">Now Playing <span class="sub">${sessions.length} active</span></div>
-    ${sessions.map((d) => {
+    <div class="vcol" data-vkey="${esc(key)}">
+      <span class="vpct">${pct}%</span>
+      <input type="range" class="vert" min="0" max="100" value="${pct}" aria-label="${esc(label)} volume">
+      <span class="vlabel" title="${esc(label)}">${esc(label)}</span>
+    </div>`;
+}
+
+function renderSide() {
+  const sessions = nowPlaying();
+  if (sessions.length === 0) { sideEl.innerHTML = ""; return; }
+  const shown = sessions.slice(0, 3);
+  const items = sideVolItems(sessions);
+  const averaged = items.length > MAX_SLIDERS;
+  const avg = items.reduce((a, i) => a + i.level, 0) / Math.max(1, items.length);
+
+  sideEl.innerHTML = `
+    <div class="side-head">Now Playing</div>
+    ${shown.map((d) => {
       const m = d.media!;
       const playing = isPlaying(m);
       const title = m.title || m.app || "Unknown track";
-      const detail = [m.title ? m.artist : undefined, m.album].filter(Boolean).join(" · ");
+      const art = m.image ? `<img class="side-art" src="${esc(m.image)}" alt="">` : "";
       return `
-      <div class="np" data-np="${esc(d.id)}">
-        ${m.image ? `<img class="np-art" src="${esc(m.image)}" alt="">` : `<div class="np-art np-blank">♪</div>`}
-        <div class="np-text">
-          <div class="np-title">${esc(title)}</div>
-          ${detail ? `<div class="np-detail">${esc(detail)}</div>` : ""}
-          <div class="np-where"><span class="np-state ${playing ? "on" : ""}">${playing ? "Playing" : "Paused"}</span> on ${esc(displayName(d))}${m.app && m.title ? ` · ${esc(m.app)}` : ""}</div>
+      <div class="side-np" data-np="${esc(d.id)}">
+        <div class="side-top">
+          ${art}
+          <div class="side-txt">
+            <div class="side-title" title="${esc(title)}">${esc(title)}</div>
+            ${m.title && m.artist ? `<div class="side-sub" title="${esc(m.artist)}">${esc(m.artist)}</div>` : ""}
+            <div class="side-sub">${playing ? "" : "Paused · "}${esc(displayName(d))}</div>
+          </div>
         </div>
-        <div class="np-ctl">
+        <div class="side-ctl">
           <button class="btn icon" data-np-act="prev" title="Previous">⏮</button>
-          <button class="btn icon np-main" data-np-act="${playing ? "pause" : "play"}" title="${playing ? "Pause" : "Play"}">${playing ? "⏸" : "▶"}</button>
+          <button class="btn icon" data-np-act="${playing ? "pause" : "play"}" title="${playing ? "Pause" : "Play"}">${playing ? "⏸" : "▶"}</button>
           <button class="btn icon" data-np-act="next" title="Next">⏭</button>
         </div>
       </div>`;
-    }).join("")}`;
-}
+    }).join("")}
+    ${sessions.length > shown.length ? `<div class="side-sub">+${sessions.length - shown.length} more playing</div>` : ""}
+    ${items.length ? `
+      <div class="vstrip">
+        ${averaged ? sideSlider("avg", "Average", avg) : items.map((i) => sideSlider((i.kind === "group" ? "g:" : "d:") + i.id, i.label, i.level)).join("")}
+      </div>
+      ${averaged ? `<div class="side-note">Average of ${items.length} sync groups. Moving it scales them all up or down together.</div>` : ""}` : ""}`;
 
-function wireNowPlaying() {
-  content.querySelectorAll<HTMLElement>(".np").forEach((el) => {
+  sideEl.querySelectorAll<HTMLElement>(".side-np").forEach((el) => {
     const id = el.dataset.np!;
     el.querySelectorAll<HTMLElement>("[data-np-act]").forEach((b) =>
       b.addEventListener("click", () => invoke("media_cmd", { id, action: b.dataset.npAct })));
-    const art = el.querySelector<HTMLImageElement>("img.np-art");
-    art?.addEventListener("error", () => art.replaceWith(Object.assign(document.createElement("div"), { className: "np-art np-blank", textContent: "♪" })));
+    el.querySelector<HTMLImageElement>("img.side-art")?.addEventListener("error", (e) => (e.target as HTMLElement).remove());
   });
+
+  sideEl.querySelectorAll<HTMLElement>(".vcol").forEach((col) => {
+    const key = col.dataset.vkey!;
+    const input = col.querySelector<HTMLInputElement>("input")!;
+    const pctEl = col.querySelector(".vpct")!;
+    const dragKey = "side:" + key;
+    // The average slider scales every item from where it stood when the drag began.
+    let base: VolItem[] = items;
+    let baseAvg = avg;
+    input.addEventListener("pointerdown", () => {
+      dragging.add(dragKey);
+      base = items.map((i) => ({ ...i }));
+      baseAvg = base.reduce((a, i) => a + i.level, 0) / Math.max(1, base.length);
+    });
+    input.addEventListener("pointerup", () => setTimeout(() => { dragging.delete(dragKey); renderSide(); renderIfPending(); }, 800));
+    input.addEventListener("input", () => {
+      const v = Number(input.value) / 100;
+      pctEl.textContent = `${input.value}%`;
+      debounce(dragKey, 180, () => {
+        if (key === "avg") {
+          for (const i of base) applyVol(i, baseAvg > 0.01 ? i.level * (v / baseAvg) : v);
+        } else {
+          const item = items.find((i) => (i.kind === "group" ? "g:" : "d:") + i.id === key);
+          if (item) applyVol(item, v);
+        }
+      });
+    });
+  });
+}
+
+function sideDragging(): boolean {
+  return [...dragging].some((k) => k.startsWith("side:"));
 }
 
 // ---------------- devices view ----------------
@@ -132,7 +212,6 @@ function renderDevices() {
   const stale = (d: Device) => !d.online && Date.now() / 1000 - d.last_seen > 86400;
   const html = `
     <h2>Devices <span class="sub">${state.devices.filter((d) => d.online).length} online / ${state.devices.length} known</span></h2>
-    ${nowPlayingPanel()}
     <div class="toolbar">
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
@@ -154,7 +233,6 @@ function renderDevices() {
   });
   document.getElementById("add-manual")!.addEventListener("click", showAddManual);
 
-  wireNowPlaying();
   for (const d of state.devices) wireDeviceCard(d);
 }
 
@@ -185,7 +263,6 @@ function deviceCard(d: Device, stale: boolean): string {
         <button class="btn icon" data-act="prev">⏮</button>
         <button class="btn icon" data-act="${d.media.state === "PLAYING" ? "pause" : "play"}">${d.media.state === "PLAYING" ? "⏸" : "▶"}</button>
         <button class="btn icon" data-act="next">⏭</button>` : ""}
-      ${d.backend === "roku" ? `<button class="btn icon" data-act="recal" title="Re-zero volume calibration on next set">🎯</button>` : ""}
       ${stale ? `<button class="btn danger icon" data-act="delete" title="Remove until seen again">✕</button>` : ""}
       <label class="gain-wrap" title="Sync Gain (0–200%, default 100%): balance this device inside sync groups. Its actual volume = group volume × gain; it reports volume ÷ gain back to the group. Example: at 50% gain, group volume 30% puts this device at 15%.">
         <span>Sync Gain</span>
@@ -195,14 +272,60 @@ function deviceCard(d: Device, stale: boolean): string {
         </div>
       </label>
     </div>
+    ${d.backend === "roku" ? tvRow(d) : ""}
     ${media}
   </div>`;
+}
+
+const openRemotes = new Set<string>();
+
+/** Power, input and remote controls for TVs that report them (Roku). */
+function tvRow(d: Device): string {
+  const known = d.inputs.some((i) => i.label === d.input);
+  const power = d.power == null ? "" : `
+      <button class="btn tv-power ${d.power ? "on" : ""}" data-act="power" title="Turn the TV ${d.power ? "off" : "on"}">⏻ ${d.power ? "On" : "Off"}</button>`;
+  const inputs = d.inputs.length === 0 ? "" : `
+      <label class="tv-input">Input
+        <select data-act="input">
+          ${known ? "" : `<option value="" selected disabled>${esc(d.input || "Choose…")}</option>`}
+          ${d.inputs.map((i) => `<option value="${esc(i.id)}" ${i.label === d.input ? "selected" : ""}>${esc(i.label)}</option>`).join("")}
+        </select>
+      </label>`;
+  const remote = openRemotes.has(d.id) ? `
+    <div class="remote">
+      <div class="dpad">
+        <span></span><button class="btn" data-key="Up" title="Up">▲</button><span></span>
+        <button class="btn" data-key="Left" title="Left">◀</button><button class="btn ok" data-key="Select">OK</button><button class="btn" data-key="Right" title="Right">▶</button>
+        <span></span><button class="btn" data-key="Down" title="Down">▼</button><span></span>
+      </div>
+      <div class="rkeys">
+        <div><button class="btn" data-key="Back">Back</button><button class="btn" data-key="Home">Home</button><button class="btn" data-key="Info" title="Options">✱</button></div>
+        <div><button class="btn" data-key="Rev" title="Rewind">⏪</button><button class="btn" data-key="Play" title="Play/Pause">⏯</button><button class="btn" data-key="Fwd" title="Fast forward">⏩</button></div>
+        <div><button class="btn" data-key="InstantReplay" title="Instant replay">↺ Replay</button><button class="btn" data-key="ChannelUp" title="Channel up">CH ▲</button><button class="btn" data-key="ChannelDown" title="Channel down">CH ▼</button></div>
+      </div>
+    </div>` : "";
+  return `
+    <div class="tv-row">
+      ${power}${inputs}
+      <button class="btn" data-act="remote">${openRemotes.has(d.id) ? "Hide remote" : "Remote"}</button>
+      <button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>
+    </div>${remote}`;
 }
 
 function wireDeviceCard(d: Device) {
   const card = content.querySelector(`.card[data-id="${CSS.escape(d.id)}"]`);
   if (!card) return;
   const q = (sel: string) => card.querySelector(sel) as HTMLElement | null;
+
+  q('[data-act="power"]')?.addEventListener("click", () => invoke("set_power", { id: d.id, on: !d.power }));
+  const inputSel = q('[data-act="input"]') as HTMLSelectElement | null;
+  inputSel?.addEventListener("change", () => { invoke("set_input", { id: d.id, input: inputSel.value }); inputSel.blur(); });
+  q('[data-act="remote"]')?.addEventListener("click", () => {
+    if (openRemotes.has(d.id)) openRemotes.delete(d.id); else openRemotes.add(d.id);
+    render();
+  });
+  card.querySelectorAll<HTMLElement>("[data-key]").forEach((b) =>
+    b.addEventListener("click", () => invoke("device_key", { id: d.id, key: b.dataset.key })));
 
   const slider = q('[data-act="vol"]') as HTMLInputElement | null;
   if (slider) {
@@ -248,7 +371,6 @@ function showAddManual() {
 function renderGroups() {
   content.innerHTML = `
     <h2>Sync Groups <span class="sub">members' volumes stay matched — independent of Google cast groups</span></h2>
-    ${nowPlayingPanel()}
     <div class="toolbar"><button class="btn primary" id="add-group">+ New Sync Group</button></div>
     ${state.groups.map((g) => groupCard(g)).join("")}
     ${state.groups.length === 0 ? `<div class="hint">Create a sync group to control several devices with one slider, keep their volumes in sync, and get quick tray presets.</div>` : ""}
@@ -259,7 +381,6 @@ function renderGroups() {
     const groups = [...state.groups, { id: crypto.randomUUID(), name, member_ids: [], sync_enabled: true, group_volume: 0.5 }];
     invoke("save_groups", { groups });
   });
-  wireNowPlaying();
   for (const g of state.groups) wireGroupCard(g);
 }
 
@@ -322,6 +443,27 @@ function wireGroupCard(g: Group) {
 
 // ---------------- schedule view ----------------
 
+function parseTime(t: string): [number, number] {
+  const [h, m] = t.split(":").map(Number);
+  return [Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0];
+}
+
+/** Hour / minute / AM-PM picker; the schedule keeps storing 24-hour "HH:MM". */
+function timePicker(time: string): string {
+  const [h, m] = parseTime(time);
+  const h12 = h % 12 || 12;
+  const pm = h >= 12;
+  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+  if (!minutes.includes(m)) minutes.push(m), minutes.sort((a, b) => a - b);
+  return `
+    <div class="tpick" title="Time this event runs">
+      <select data-t="h" aria-label="Hour">${Array.from({ length: 12 }, (_, i) => i + 1).map((v) => `<option value="${v}" ${v === h12 ? "selected" : ""}>${v}</option>`).join("")}</select>
+      <span class="tsep">:</span>
+      <select data-t="m" aria-label="Minute">${minutes.map((v) => `<option value="${v}" ${v === m ? "selected" : ""}>${String(v).padStart(2, "0")}</option>`).join("")}</select>
+      <div class="ampm"><button type="button" class="${pm ? "" : "on"}" data-ampm="am">AM</button><button type="button" class="${pm ? "on" : ""}" data-ampm="pm">PM</button></div>
+    </div>`;
+}
+
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function renderSchedule() {
@@ -346,7 +488,7 @@ function schedCard(s: Sched): string {
   <div class="card" data-sid="${esc(s.id)}">
     <div class="row wrap">
       <label class="chk"><input type="checkbox" data-act="en" ${s.enabled ? "checked" : ""} /> Enabled</label>
-      <input type="time" data-act="time" value="${esc(s.time)}" />
+      ${timePicker(s.time)}
       <div class="day-row">
         ${DAY_NAMES.map((n, i) => `<label>${n}<input type="checkbox" data-day="${i}" ${s.days[i] ? "checked" : ""} /></label>`).join("")}
       </div>
@@ -378,9 +520,24 @@ function wireSchedCard(s: Sched) {
   (card.querySelector('[data-act="en"]') as HTMLInputElement).addEventListener("change", (e) => {
     s.enabled = (e.target as HTMLInputElement).checked; saveAll();
   });
-  (card.querySelector('[data-act="time"]') as HTMLInputElement).addEventListener("change", (e) => {
-    s.time = (e.target as HTMLInputElement).value; saveAll();
+  const tp = card.querySelector<HTMLElement>(".tpick")!;
+  const setTime = (h12: number, m: number, pm: boolean) => {
+    s.time = `${String((h12 % 12) + (pm ? 12 : 0)).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    saveAll();
+  };
+  const cur = () => {
+    const [h, m] = parseTime(s.time);
+    return { h12: h % 12 || 12, m, pm: h >= 12 };
+  };
+  tp.querySelector<HTMLSelectElement>('[data-t="h"]')!.addEventListener("change", (e) => {
+    const c = cur(); setTime(Number((e.target as HTMLSelectElement).value), c.m, c.pm);
   });
+  tp.querySelector<HTMLSelectElement>('[data-t="m"]')!.addEventListener("change", (e) => {
+    const c = cur(); setTime(c.h12, Number((e.target as HTMLSelectElement).value), c.pm);
+  });
+  tp.querySelectorAll<HTMLElement>("[data-ampm]").forEach((b) => b.addEventListener("click", () => {
+    const c = cur(); setTime(c.h12, c.m, b.dataset.ampm === "pm");
+  }));
   card.querySelectorAll("[data-day]").forEach((el) => el.addEventListener("change", () => {
     s.days[Number((el as HTMLElement).dataset.day)] = (el as HTMLInputElement).checked; saveAll();
   }));
@@ -452,7 +609,14 @@ function renderSettings() {
         <button class="btn" id="support-repo">Source on GitHub</button>
       </div>
       <div class="hint">This app is free and open source. If it made your house sound better, a small tip keeps it that way. Links open in your browser.</div>
+    </div>
+    <div class="card">
+      <div class="credits-title">Open-source credits</div>
+      <p class="credits">Built with <b>Tauri</b>, <b>Tokio</b>, <b>Serde</b>, <b>mdns-sd</b>, <b>prost</b>, <b>reqwest</b>, <b>rustls</b>, <b>native-tls</b>, <b>tungstenite</b>, <b>tracing</b> and <b>chrono</b>, plus about 350 other open-source packages. Thank you to everyone who maintains them.</p>
+      <p class="credits">The Google Cast message format comes from Chromium's <i>cast_channel.proto</i> (BSD-3-Clause, The Chromium Authors). Roku control follows Roku's published External Control Protocol documentation.</p>
+      <div class="support-row" style="margin-top:10px"><button class="btn" id="open-notices">View all licenses</button></div>
     </div>`;
+  document.getElementById("open-notices")!.addEventListener("click", () => invoke("open_notices"));
   document.getElementById("support-donate")!.addEventListener("click", () => openUrl(DONATE_URL));
   document.getElementById("support-site")!.addEventListener("click", () => openUrl(SITE_URL));
   document.getElementById("support-repo")!.addEventListener("click", () => openUrl(REPO_URL));
@@ -501,7 +665,9 @@ listen<Snapshot>("state", (e) => {
   // Avoid clobbering UI while user drags a slider or edits text - but still
   // live-update the OTHER sliders so sync is visible during a drag.
   const active = document.activeElement;
-  const editing = active instanceof HTMLInputElement && (active.type === "text" || active.type === "time" || active.type === "number");
+  const editing = (active instanceof HTMLInputElement && (active.type === "text" || active.type === "time" || active.type === "number"))
+    || active instanceof HTMLSelectElement;
+  if (!sideDragging()) renderSide();
   if (dragging.size === 0 && !editing && view !== "log") {
     pendingRender = false;
     render();
@@ -533,7 +699,7 @@ function renderIfPending() {
   }
 }
 
-invoke<Snapshot>("get_state").then((s) => { state = s; render(); maybeCheckUpdates(); });
+invoke<Snapshot>("get_state").then((s) => { state = s; render(); renderSide(); maybeCheckUpdates(); });
 
 async function maybeCheckUpdates() {
   if (!state.settings.auto_update) return;
