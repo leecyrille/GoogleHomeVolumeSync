@@ -40,6 +40,7 @@ interface Device {
 interface InputOption { id: string; label: string; kind: string; icon?: string | null; }
 interface TvStatus {
   restricted: boolean;
+  has_power: boolean;
   power?: boolean | null;
   showing?: string | null;
   showing_icon?: string | null;
@@ -284,7 +285,7 @@ function deviceCard(d: Device, stale: boolean): string {
         </div>
       </label>
     </div>
-    ${d.backend === "roku" ? tvRow(d) : ""}
+    ${d.tv ? tvRow(d) : ""}
     ${media}
   </div>`;
 }
@@ -309,15 +310,18 @@ function tvRow(d: Device): string {
       </span>` : "";
   return `
     <div class="tv-row">
-      ${tv.power == null ? "" : `<button class="btn tv-power ${tv.power ? "on" : ""}" data-act="power" title="Turn the TV ${tv.power ? "off" : "on"}">⏻ ${tv.power ? "On" : "Off"}</button>`}
+      ${tv.has_power ? `
+      <div class="pwr" title="${tv.power == null ? "This device doesn't report whether it's on" : ""}">
+        <button class="${tv.power === true ? "on" : ""}" data-power="on">⏻ On</button><button class="${tv.power === false ? "off" : ""}" data-power="off">Off</button>
+      </div>` : ""}
       ${showing}
       ${tv.headphones ? `<span class="tv-badge" title="Headphones are connected (private listening), so the TV speakers are silent">🎧 Private listening</span>` : ""}
       <span class="grow"></span>
       ${inputs}
-      <button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>
+      ${d.backend === "roku" ? `<button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>` : ""}
     </div>${tv.restricted ? `
     <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
-      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}
+      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${d.backend !== "roku" ? "" : `
     <div class="remote">
       <div class="dpad">
         <span></span><button class="btn" data-key="Up" title="Up">▲</button><span></span>
@@ -329,7 +333,7 @@ function tvRow(d: Device): string {
         <div><button class="btn" data-key="Rev" title="Rewind">⏪</button><button class="btn" data-key="Play" title="Play/Pause">⏯</button><button class="btn" data-key="Fwd" title="Fast forward">⏩</button></div>
         <div><button class="btn" data-key="InstantReplay" title="Instant replay">↺ Replay</button><button class="btn" data-key="ChannelUp" title="Channel up">CH ▲</button><button class="btn" data-key="ChannelDown" title="Channel down">CH ▼</button></div>
       </div>
-    </div>`;
+    </div>`}`;
 }
 
 function wireDeviceCard(d: Device) {
@@ -337,7 +341,8 @@ function wireDeviceCard(d: Device) {
   if (!card) return;
   const q = (sel: string) => card.querySelector(sel) as HTMLElement | null;
 
-  q('[data-act="power"]')?.addEventListener("click", () => invoke("set_power", { id: d.id, on: !d.tv?.power }));
+  card.querySelectorAll<HTMLElement>("[data-power]").forEach((b) =>
+    b.addEventListener("click", () => invoke("set_power", { id: d.id, on: b.dataset.power === "on" })));
   const inputSel = q('[data-act="input"]') as HTMLSelectElement | null;
   inputSel?.addEventListener("change", () => { invoke("set_input", { id: d.id, input: inputSel.value }); inputSel.blur(); });
   card.querySelectorAll<HTMLImageElement>(".tv-now img").forEach((img) => img.addEventListener("error", () => img.remove()));

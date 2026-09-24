@@ -212,6 +212,7 @@ impl RokuActor {
 
         let tv = TvStatus {
             restricted,
+            has_power: is_tv,
             // PowerOn = screen on. Ready / DisplayOff / Headless / Suspend all mean off.
             power: if is_tv { xml_tag(&info, "power-mode").map(|p| p == "PowerOn") } else { None },
             showing,

@@ -88,7 +88,10 @@ pub struct InputOption {
 pub struct TvStatus {
     /// "Control by mobile apps" is Limited: power, inputs and app queries are refused.
     pub restricted: bool,
-    /// None when the device has no screen power (a streaming stick).
+    /// Can be switched on and off from the app.
+    #[serde(default)]
+    pub has_power: bool,
+    /// Current screen power; None when the device doesn't report it.
     pub power: Option<bool>,
     /// What's on screen: an input ("Nintendo Switch") or an app ("Netflix").
     pub showing: Option<String>,

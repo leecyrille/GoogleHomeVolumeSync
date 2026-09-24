@@ -4,7 +4,7 @@
 //! Commands are write-mostly; state queries are unreliable across models,
 //! so we track assumed state locally.
 
-use crate::types::{CoreEvent, DeviceCmd};
+use crate::types::{CoreEvent, DeviceCmd, TvStatus};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
@@ -40,6 +40,11 @@ impl OptomaActor {
                         online = reachable;
                         info!(id=%self.id, name=%self.name, online, "optoma: reachability changed");
                         let _ = self.events.send(CoreEvent::Online { id: self.id.clone(), online }).await;
+                        if online {
+                            // Power can be switched, but this write-only connection can't read the state back.
+                            let tv = TvStatus { has_power: true, ..Default::default() };
+                            let _ = self.events.send(CoreEvent::DeviceStatus { id: self.id.clone(), tv, macs: Vec::new() }).await;
+                        }
                     }
                 }
                 cmd = self.cmd_rx.recv() => {
@@ -57,6 +62,8 @@ impl OptomaActor {
                             Some(format!("~0080 {}\r", if *m { 1 } else { 0 })) // AV mute / audio mute
                         }
                         DeviceCmd::Refresh => None,
+                        // Optoma RS-232 set: ~XX00 1 = power on, ~XX00 0 = power off (XX = projector ID 00).
+                        DeviceCmd::Power(on) => Some(format!("~0000 {}\r", if *on { 1 } else { 0 })),
                         _ => None, // no transport controls
                     };
                     if let Some(raw) = raw {

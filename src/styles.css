@@ -222,7 +222,6 @@ input[type="range"].vert {
 
 /* ---- TV controls (Roku) ---- */
 .tv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; padding-left: 19px; }
-.tv-power.on { color: var(--ok); border-color: var(--ok); }
 .tv-warn { margin: 8px 0 2px 19px; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: #f0d58a; background: #2e2610; border: 1px solid #6b5518; border-radius: 7px; }
 .tv-warn b { color: #ffe7a3; font-weight: 600; }
 .remote { display: flex; gap: 18px; align-items: center; margin: 10px 0 4px 19px; }
@@ -256,3 +255,11 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .tv-now b { font-size: 13px; font-weight: 600; }
 .tv-now i { font-style: normal; font-size: 12px; color: var(--text-dim); margin-left: 8px; }
 .tv-badge { font-size: 12px; color: #c9b8ff; background: #241d3d; border: 1px solid #4a3b7a; border-radius: 99px; padding: 3px 10px; }
+
+/* ---- power on / off ---- */
+.pwr { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.pwr button { background: var(--bg-hover); color: var(--text); border: none; padding: 6px 14px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.pwr button + button { border-left: 1px solid var(--border); }
+.pwr button:hover { color: var(--accent); }
+.pwr button.on { background: #173a26; color: var(--ok); font-weight: 600; }
+.pwr button.off { background: #2a1d1f; color: #e39a9a; font-weight: 600; }
