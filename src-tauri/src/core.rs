@@ -493,10 +493,12 @@ impl Core {
     /// state or their track changes (BUFFERING counts as playing, so the
     /// constant PLAYING/BUFFERING flicker during streams doesn't rebuild it).
     pub fn refresh_tray_if_playback_changed(&self) {
-        let sig: String = self.now_playing().iter()
+        let mut sig: String = self.now_playing().iter()
             .map(|n| format!("{}|{}|{:?}|{:?}", n.id, n.playing, n.title, n.artist))
             .collect::<Vec<_>>()
             .join(";");
+        // The calendar submenu: which screens there are and which show it.
+        sig += &format!("#{:?}#{:?}", crate::calendar::screens(self), crate::calendar::showing_ids());
         {
             let mut inner = self.inner.lock().unwrap();
             if inner.tray_sig == sig {

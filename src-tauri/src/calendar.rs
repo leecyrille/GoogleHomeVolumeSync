@@ -209,6 +209,47 @@ fn start_showing(id: &str, ip: &str, opts: ShowOpts, window: Option<String>) {
     });
 }
 
+/// Screens showing the calendar now.
+pub fn showing_ids() -> Vec<String> {
+    let mut v: Vec<String> = rt().showing.keys().cloned().collect();
+    v.sort();
+    v
+}
+
+/// TVs and Google displays that can show the calendar: (id, name), by name.
+pub fn screens(core: &Core) -> Vec<(String, String)> {
+    const AUDIO_ONLY: &[&str] = &["mini", "nest audio", "chromecast audio", "home max", "speaker"];
+    let inner = core.inner.lock().unwrap();
+    let mut v: Vec<(String, String)> = inner.devices.iter()
+        .filter(|(_, e)| e.info.online)
+        .filter(|(_, e)| match e.info.backend {
+            Backend::Roku => true,
+            Backend::Cast => {
+                let model = e.info.model.to_ascii_lowercase();
+                !e.info.is_cast_group && model != "google home" && !AUDIO_ONLY.iter().any(|a| model.contains(a))
+            }
+            _ => false,
+        })
+        .map(|(id, e)| (id.clone(), e.info.custom_name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| e.info.friendly_name.clone())))
+        .collect();
+    v.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+    v
+}
+
+/// Show the calendar on a screen, or stop it if it's showing (the tray menu).
+pub async fn toggle(core: &Arc<Core>, id: &str) -> Result<(), String> {
+    if rt().showing.contains_key(id) {
+        stop(core, &[id.to_string()]);
+    } else {
+        let small = is_small_display(core, id);
+        let opts = manual_opts(&core.inner.lock().unwrap().cfg.calendar, id, small);
+        show_on(core, id, opts, None, false).await?;
+    }
+    step(core).await;
+    core.emit_state();
+    Ok(())
+}
+
 /// True if it was showing.
 pub fn stop_showing(id: &str) -> bool {
     let mut r = rt();
@@ -430,6 +471,7 @@ pub async fn step(core: &Arc<Core>) {
     if changed {
         core.emit_state();
     }
+    core.refresh_tray_if_playback_changed();
 }
 
 fn parse_hm(s: &str) -> (u32, u32) {

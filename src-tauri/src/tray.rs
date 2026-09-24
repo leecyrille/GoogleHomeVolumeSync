@@ -1,9 +1,9 @@
 use crate::core::{Core, NowPlaying};
 use std::sync::Arc;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
-use tracing::info;
+use tracing::{info, warn};
 
 pub const TRAY_ID: &str = "main-tray";
 
@@ -25,6 +25,25 @@ fn session_label(n: &NowPlaying) -> String {
     } else {
         label
     }
+}
+
+/// "Show calendar" and the screens that can show it (ticked while they do).
+fn calendar_menu(app: &AppHandle, core: &Core) -> tauri::Result<Option<Submenu<tauri::Wry>>> {
+    let screens = crate::calendar::screens(core);
+    if screens.is_empty() {
+        return Ok(None);
+    }
+    let showing = crate::calendar::showing_ids();
+    let sub = Submenu::new(app, "📅 Show calendar", true)?;
+    for (id, name) in &screens {
+        let item = CheckMenuItem::with_id(app, format!("cal|{id}"), name.replace('&', "&&"), true, showing.contains(id), None::<&str>)?;
+        sub.append(&item)?;
+    }
+    if !showing.is_empty() {
+        sub.append(&PredefinedMenuItem::separator(app)?)?;
+        sub.append(&MenuItem::with_id(app, "calstop", "Stop the calendar everywhere", true, None::<&str>)?)?;
+    }
+    Ok(Some(sub))
 }
 
 pub fn build_menu(app: &AppHandle, core: &Core) -> tauri::Result<Menu<tauri::Wry>> {
@@ -55,6 +74,10 @@ pub fn build_menu(app: &AppHandle, core: &Core) -> tauri::Result<Menu<tauri::Wry
             menu.append(&MenuItem::with_id(app, format!("gt|{}|{}", g.id, action), label, true, None::<&str>)?)?;
         }
         menu.append(&PredefinedMenuItem::separator(app)?)?;
+        if let Some(cal) = calendar_menu(app, core)? {
+            menu.append(&cal)?;
+            menu.append(&PredefinedMenuItem::separator(app)?)?;
+        }
         menu.append(&MenuItem::with_id(app, "open", "Open App", true, None::<&str>)?)?;
         menu.append(&MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?)?;
         return Ok(menu);
@@ -74,6 +97,10 @@ pub fn build_menu(app: &AppHandle, core: &Core) -> tauri::Result<Menu<tauri::Wry
         menu.append(&sub)?;
     }
     if !groups.is_empty() {
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+    }
+    if let Some(cal) = calendar_menu(app, core)? {
+        menu.append(&cal)?;
         menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
     menu.append(&MenuItem::with_id(app, "open", "Open App", true, None::<&str>)?)?;
@@ -102,6 +129,14 @@ pub fn setup_tray(app: &AppHandle, core: Arc<Core>) -> tauri::Result<()> {
             info!(menu_id=%id, "tray: menu clicked");
             match id {
                 "open" => show_main_window(app),
+                "calstop" => {
+                    let core = core_for_menu.clone();
+                    tauri::async_runtime::spawn(async move {
+                        crate::calendar::stop(&core, &crate::calendar::showing_ids());
+                        crate::calendar::step(&core).await;
+                        core.emit_state();
+                    });
+                }
                 "exit" => {
                     core_for_menu.save_config();
                     app.exit(0);
@@ -109,6 +144,21 @@ pub fn setup_tray(app: &AppHandle, core: Arc<Core>) -> tauri::Result<()> {
                 other => {
                     let parts: Vec<&str> = other.split('|').collect();
                     match parts.as_slice() {
+                        ["cal", id] => {
+                            let core = core_for_menu.clone();
+                            let app = app.clone();
+                            let id = id.to_string();
+                            tauri::async_runtime::spawn(async move {
+                                if let Err(e) = crate::calendar::toggle(&core, &id).await {
+                                    warn!(id=%id, error=%e, "tray: calendar");
+                                    use tauri_plugin_dialog::DialogExt;
+                                    app.dialog().message(format!("Couldn't show the calendar: {e}")).title("Volume Sync").show(|_| {});
+                                }
+                                // A check item ticks itself when clicked: put it back in line.
+                                core.inner.lock().unwrap().tray_sig.clear();
+                                core.refresh_tray_if_playback_changed();
+                            });
+                        }
                         ["gv", gid, pct] => {
                             if let Ok(pct) = pct.parse::<f32>() {
                                 core_for_menu.set_group_volume(gid, pct / 100.0);
