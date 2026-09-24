@@ -45,6 +45,9 @@ pub struct DeviceInfo {
     /// to the group for sync purposes.
     #[serde(default = "default_gain")]
     pub sync_gain: f32,
+    /// The device only allows limited control (Roku "Control by mobile apps" = Limited).
+    #[serde(default)]
+    pub restricted: bool,
     /// Screen power for devices that report it (Roku TVs); None = not supported/unknown.
     #[serde(default)]
     pub power: Option<bool>,
@@ -93,7 +96,7 @@ pub enum CoreEvent {
     /// Members of a Google cast group (normalized device ids), via multizone.
     GroupMembers { id: String, members: Vec<String> },
     /// Power/input state from devices that report it, plus MAC addresses for wake-on-LAN.
-    DeviceStatus { id: String, power: Option<bool>, input: Option<String>, inputs: Vec<InputOption>, macs: Vec<String> },
+    DeviceStatus { id: String, restricted: bool, power: Option<bool>, input: Option<String>, inputs: Vec<InputOption>, macs: Vec<String> },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

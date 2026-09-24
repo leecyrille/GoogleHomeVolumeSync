@@ -225,6 +225,8 @@ input[type="range"].vert {
 .tv-power.on { color: var(--ok); border-color: var(--ok); }
 .tv-input { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
 .tv-input select { padding: 4px 8px; }
+.tv-warn { margin: 8px 0 2px 19px; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: #f0d58a; background: #2e2610; border: 1px solid #6b5518; border-radius: 7px; }
+.tv-warn b { color: #ffe7a3; font-weight: 600; }
 .remote { display: flex; gap: 18px; align-items: center; margin: 10px 0 4px 19px; }
 .dpad { display: grid; grid-template-columns: repeat(3, 40px); grid-auto-rows: 34px; gap: 4px; }
 .dpad .btn { padding: 0; font-size: 13px; }

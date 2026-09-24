@@ -157,6 +157,7 @@ impl Core {
                         muted: false,
                         can_absolute_volume: true,
                         sync_gain: 1.0,
+                        restricted: false,
                         power: None,
                         input: None,
                         inputs: Vec::new(),
@@ -239,6 +240,7 @@ impl Core {
                     muted: false,
                     can_absolute_volume: can_abs,
                     sync_gain: 1.0,
+                    restricted: false,
                     power: None,
                     input: None,
                     inputs: Vec::new(),
@@ -526,9 +528,10 @@ impl Core {
                 self.emit_state();
                 self.refresh_tray_if_playback_changed();
             }
-            CoreEvent::DeviceStatus { id, power, input, inputs, macs } => {
+            CoreEvent::DeviceStatus { id, restricted, power, input, inputs, macs } => {
                 let mut inner = self.inner.lock().unwrap();
                 if let Some(e) = inner.devices.get_mut(&id) {
+                    e.info.restricted = restricted;
                     e.info.power = power;
                     e.info.input = input;
                     e.info.inputs = inputs;

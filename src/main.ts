@@ -33,6 +33,7 @@ interface Device {
   muted: boolean;
   can_absolute_volume: boolean;
   sync_gain: number;
+  restricted?: boolean;
   power?: boolean | null;
   input?: string | null;
   inputs: { id: string; label: string }[];
@@ -311,7 +312,9 @@ function tvRow(d: Device): string {
       ${power}${inputs}
       <button class="btn" data-act="remote">${openRemotes.has(d.id) ? "Hide remote" : "Remote"}</button>
       <button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>
-    </div>${remote}`;
+    </div>${d.restricted ? `
+    <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
+      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${remote}`;
 }
 
 function wireDeviceCard(d: Device) {

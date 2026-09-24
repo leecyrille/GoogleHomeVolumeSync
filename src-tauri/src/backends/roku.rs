@@ -52,6 +52,8 @@ const FALLBACK_INPUTS: &[(&str, &str)] = &[
 
 #[derive(Default, PartialEq, Clone)]
 struct Status {
+    /// "Control by mobile apps" is Limited: power, inputs and app queries are refused.
+    restricted: bool,
     power: Option<bool>,
     input: Option<String>,
     inputs: Vec<InputOption>,
@@ -113,7 +115,10 @@ impl RokuActor {
                         DeviceCmd::Input(input) => {
                             info!(id=%self.id, name=%self.name, input=%input, "roku: switch input");
                             let ok = if let Some(key) = input.strip_prefix("key:") {
-                                keypress(&client, &base, key).await.is_ok()
+                                match keypress(&client, &base, key).await {
+                                    Ok(()) => true,
+                                    Err(e) => { warn!(id=%self.id, error=?e, "roku: input key rejected"); false }
+                                }
                             } else if let Some(app) = input.strip_prefix("app:") {
                                 client.post(format!("{base}/launch/{app}")).send().await
                                     .map(|r| r.status().is_success()).unwrap_or(false)
@@ -174,12 +179,18 @@ impl RokuActor {
             _ => None,
         };
 
-        let status = Status { power, input, inputs, macs: self.macs.clone() };
+        // Limited mode refuses the media-player query with a 403 / explanatory text.
+        let restricted = match client.get(format!("{base}/query/media-player")).send().await {
+            Ok(r) => r.status().as_u16() == 403 || r.text().await.map(|t| t.contains("Limited mode")).unwrap_or(false),
+            Err(_) => false,
+        };
+        let status = Status { restricted, power, input, inputs, macs: self.macs.clone() };
         if status != *last {
-            info!(id=%self.id, name=%self.name, power=?status.power, input=?status.input, inputs=status.inputs.len(), "roku: status");
+            info!(id=%self.id, name=%self.name, power=?status.power, input=?status.input, inputs=status.inputs.len(), restricted=status.restricted, "roku: status");
             *last = status.clone();
             let _ = self.events.send(CoreEvent::DeviceStatus {
                 id: self.id.clone(),
+                restricted: status.restricted,
                 power: status.power,
                 input: status.input,
                 inputs: status.inputs,
@@ -216,8 +227,13 @@ impl RokuActor {
             }
             return;
         }
-        if keypress(client, base, "PowerOn").await.is_ok() {
-            return;
+        match keypress(client, base, "PowerOn").await {
+            Ok(()) => return,
+            Err(KeyError::Refused(code)) => {
+                warn!(id=%self.id, code, "roku: TV refused PowerOn (Control by mobile apps is probably Limited)");
+                return;
+            }
+            Err(KeyError::Unreachable) => {}
         }
         // Not answering: it's in deep sleep. Wake it over the network, then retry.
         if self.macs.is_empty() {
@@ -283,16 +299,25 @@ impl RokuActor {
     }
 }
 
-async fn keypress(client: &reqwest::Client, base: &str, key: &str) -> Result<(), ()> {
-    client
+#[derive(Debug)]
+enum KeyError {
+    /// No answer: the TV is off the network or asleep.
+    Unreachable,
+    /// The TV answered and said no, e.g. 403 when "Control by mobile apps" is Limited.
+    Refused(u16),
+}
+
+async fn keypress(client: &reqwest::Client, base: &str, key: &str) -> Result<(), KeyError> {
+    let resp = client
         .post(format!("{base}/keypress/{key}"))
         .send()
         .await
-        .map_err(|_| ())?
-        .status()
-        .is_success()
-        .then_some(())
-        .ok_or(())
+        .map_err(|_| KeyError::Unreachable)?;
+    if resp.status().is_success() {
+        Ok(())
+    } else {
+        Err(KeyError::Refused(resp.status().as_u16()))
+    }
 }
 
 /// Discover Rokus: SSDP M-SEARCH first; if the multicast reply path is blocked
