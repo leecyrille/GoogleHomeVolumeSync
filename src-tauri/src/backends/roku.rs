@@ -1,9 +1,10 @@
 //! Roku TV backend via ECP (HTTP on port 8060).
 //!
-//! Roku ECP has no absolute volume: we emulate it. To set N%, either apply a
-//! delta from the last known (cached) level, or — when confidence is lost —
-//! re-zero by sending VolumeDown ~102 times, then VolumeUp N times.
-//! The cached level is reported via VolumeChanged so the core can persist it.
+//! Roku ECP has no "set volume" command. Roku OS 15 reports the real level in
+//! /query/audio-device, so the app presses VolumeUp/Down by the difference and
+//! re-reads to correct. Older TVs fall back to an estimate: apply the delta
+//! from the last known (cached) level, or re-zero with ~102 VolumeDown presses
+//! when that's unknown.
 
 //! Power, inputs and the remote use the same documented protocol: keypresses
 //! (PowerOn/PowerOff, InputHDMI1.., Home, Up..), /query/device-info for the
@@ -65,6 +66,8 @@ struct Seen {
     tv: TvStatus,
     macs: Vec<String>,
     media: Option<MediaInfo>,
+    /// Last volume reported from /query/audio-device, to spot remote-control changes.
+    volume: Option<(u8, bool)>,
     /// The input/app list changes rarely; it's re-read every minute.
     inputs: Vec<InputOption>,
     inputs_at: Option<std::time::Instant>,
@@ -73,6 +76,8 @@ struct Seen {
 /// Poll quickly while something plays so the progress bar stays accurate.
 const POLL_PLAYING: Duration = Duration::from_secs(3);
 const POLL_IDLE: Duration = Duration::from_secs(10);
+/// Volume is re-read on its own, faster, so remote-control changes sync quickly.
+const POLL_VOLUME: Duration = Duration::from_secs(2);
 
 impl RokuActor {
     pub async fn run(mut self) {
@@ -82,11 +87,17 @@ impl RokuActor {
             .unwrap();
         let base = format!("http://{}:8060", self.ip);
         let mut next_poll = tokio::time::Instant::now();
+        let mut volume_tick = tokio::time::interval(POLL_VOLUME);
         let mut online = false;
         let mut last = Seen::default();
 
         loop {
             tokio::select! {
+                _ = volume_tick.tick() => {
+                    if online {
+                        self.poll_volume(&client, &base, &mut last).await;
+                    }
+                }
                 _ = tokio::time::sleep_until(next_poll) => {
                     self.poll_status(&client, &base, &mut online, &mut last).await;
                     let playing = matches!(last.tv.activity.as_deref(), Some("playing" | "loading"));
@@ -109,11 +120,17 @@ impl RokuActor {
                             }
                             let target = (level * 100.0).round().clamp(0.0, 100.0) as i32;
                             self.set_volume(&client, &base, target).await;
+                            // The ramp itself isn't a remote-control change.
+                            last.volume = read_volume(&client, &base).await;
                         }
-                        DeviceCmd::SetMuted(_) => {
-                            // ECP mute is a toggle; send VolumeMute.
-                            let _ = keypress(&client, &base, "VolumeMute").await;
-                            info!(id=%self.id, "roku: VolumeMute toggled");
+                        DeviceCmd::SetMuted(want) => {
+                            // ECP mute is a toggle, so only press it when the state differs.
+                            let now = read_volume(&client, &base).await.map(|(_, m)| m);
+                            if now != Some(want) {
+                                let _ = keypress(&client, &base, "VolumeMute").await;
+                                info!(id=%self.id, want, "roku: VolumeMute toggled");
+                            }
+                            self.poll_volume(&client, &base, &mut last).await;
                         }
                         DeviceCmd::Play | DeviceCmd::Pause => { let _ = keypress(&client, &base, "Play").await; }
                         DeviceCmd::Next => { let _ = keypress(&client, &base, "Fwd").await; }
@@ -281,6 +298,7 @@ impl RokuActor {
             restricted,
             has_power: is_tv,
             dev_mode: xml_tag(&info, "developer-enabled").as_deref() == Some("true"),
+            exact_volume: last.volume.is_some(),
             player_ready: last.inputs.iter().any(|i| i.id == "app:dev") || active_id == "dev",
             position_ms,
             duration_ms,
@@ -459,8 +477,54 @@ impl RokuActor {
         warn!(id=%self.id, "roku: still unreachable after wake-on-LAN");
     }
 
+    /// Report the TV's real volume when it changes (remote control, other apps).
+    async fn poll_volume(&mut self, client: &reqwest::Client, base: &str, last: &mut Seen) {
+        let Some((vol, muted)) = read_volume(client, base).await else { return };
+        if last.volume != Some((vol, muted)) {
+            if last.volume.is_some() {
+                info!(id=%self.id, name=%self.name, vol, muted, "roku: volume changed on the TV");
+            }
+            last.volume = Some((vol, muted));
+            self.cached_level = Some(vol);
+            let _ = self.events.send(CoreEvent::VolumeChanged {
+                id: self.id.clone(), volume: vol as f32 / 100.0, muted,
+            }).await;
+        }
+    }
+
     async fn set_volume(&mut self, client: &reqwest::Client, base: &str, target: i32) {
         info!(id=%self.id, name=%self.name, target, cached=?self.cached_level, "roku: set volume");
+        if let Some((mut cur, muted)) = read_volume(client, base).await {
+            // Exact: press the difference, then re-read and correct (the first
+            // press sometimes only shows the volume bar, and fast presses can drop).
+            for _round in 0..4 {
+                let delta = target - cur as i32;
+                if delta == 0 {
+                    break;
+                }
+                let key = if delta > 0 { "VolumeUp" } else { "VolumeDown" };
+                for _ in 0..delta.abs() {
+                    if keypress(client, base, key).await.is_err() {
+                        warn!(id=%self.id, "roku: volume key failed");
+                        return;
+                    }
+                    tokio::time::sleep(KEY_DELAY).await;
+                }
+                tokio::time::sleep(Duration::from_millis(400)).await;
+                match read_volume(client, base).await {
+                    Some((v, _)) => cur = v,
+                    None => break,
+                }
+            }
+            self.cached_level = Some(cur);
+            if cur as i32 != target {
+                warn!(id=%self.id, target, landed = cur, "roku: volume didn't land exactly");
+            }
+            let _ = self.events.send(CoreEvent::VolumeChanged {
+                id: self.id.clone(), volume: cur as f32 / 100.0, muted,
+            }).await;
+            return;
+        }
         match self.cached_level {
             Some(cur) => {
                 let delta = target - cur as i32;
@@ -709,4 +773,13 @@ fn parse_ms(v: &str) -> Option<u64> {
 
 fn unix_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+/// The TV's real volume and mute state (Roku OS 15+), from /query/audio-device.
+async fn read_volume(client: &reqwest::Client, base: &str) -> Option<(u8, bool)> {
+    let x = get_text(client, &format!("{base}/query/audio-device")).await?;
+    let global = x.split("<global>").nth(1)?.split("</global>").next()?;
+    let vol: u8 = xml_tag(global, "volume")?.parse().ok()?;
+    let muted = xml_tag(global, "muted").as_deref() == Some("true");
+    Some((vol.min(100), muted))
 }

@@ -582,7 +582,7 @@ impl Core {
                         }
                         // Echo suppression: is this our own SET_VOLUME coming back?
                         let is_echo = inner.pending.get(&id)
-                            .map(|(exp, at)| (exp - volume).abs() <= 0.03 && at.elapsed() < Duration::from_secs(5))
+                            .map(|(exp, at)| (exp - volume).abs() <= 0.03 && at.elapsed() < Duration::from_secs(30))
                             .unwrap_or(false);
                         if is_echo {
                             inner.pending.remove(&id);

@@ -142,6 +142,10 @@ pub struct TvStatus {
     /// The Volume Sync Player channel is installed, so files can be played.
     #[serde(default)]
     pub player_ready: bool,
+    /// The TV reports its real volume (Roku OS 15 /query/audio-device), so
+    /// volume is set exactly instead of estimated.
+    #[serde(default)]
+    pub exact_volume: bool,
     pub inputs: Vec<InputOption>,
     /// Headphones plugged into the remote or app (private listening).
     pub headphones: bool,

@@ -55,6 +55,7 @@ interface TvStatus {
   is_live?: boolean;
   dev_mode?: boolean;
   player_ready?: boolean;
+  exact_volume?: boolean;
   inputs: InputOption[];
   headphones: boolean;
   model?: string | null;
@@ -477,7 +478,7 @@ function tvRow(d: Device): string {
       ${tv.headphones ? `<span class="tv-badge" title="Headphones are connected (private listening), so the TV speakers are silent">🎧 Private listening</span>` : ""}
       <span class="grow"></span>
       ${inputs}
-      ${d.backend === "roku" ? `<button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>` : ""}
+      ${d.backend === "roku" && !tv.exact_volume ? `<button class="btn" data-act="recal" title="This TV doesn't report its volume, so the app estimates it. Recalibrate re-zeros that estimate on the next change.">Recalibrate volume</button>` : ""}
     </div>${tv.restricted ? `
     <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
       <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${progressRow(d)}${playRow(d)}${d.backend !== "roku" ? "" : `
