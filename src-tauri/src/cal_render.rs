@@ -26,16 +26,40 @@ pub fn dir() -> PathBuf {
     d
 }
 
-pub fn file_name(theme: &str, view: &str, ext: &str) -> String {
-    format!("calendar-{theme}-{view}.{ext}")
+/// One look of the calendar: theme, text size and whether photos show. Each look in
+/// use gets its own set of pictures.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Variant {
+    pub theme: String,
+    pub text_pct: u32,
+    pub photos: bool,
+}
+
+impl Variant {
+    /// e.g. "dark-t100-p1" (the Roku player puts this in the file names it fetches).
+    pub fn name(&self) -> String {
+        format!("{}-t{}-p{}", self.theme, self.text_pct, self.photos as u8)
+    }
+}
+
+fn is_variant_name(s: &str) -> bool {
+    let mut it = s.split('-');
+    let (Some(theme), Some(t), Some(p), None) = (it.next(), it.next(), it.next(), it.next()) else { return false };
+    matches!(theme, "dark" | "light")
+        && t.strip_prefix('t').map(|n| !n.is_empty() && n.len() <= 3 && n.bytes().all(|b| b.is_ascii_digit())).unwrap_or(false)
+        && matches!(p, "p0" | "p1")
+}
+
+pub fn file_name(variant: &str, view: &str, ext: &str) -> String {
+    format!("calendar-{variant}-{view}.{ext}")
 }
 
 /// Files TVs may fetch from the calendar folder.
 pub fn is_served_name(name: &str) -> bool {
     let Some(rest) = name.strip_prefix("calendar-") else { return false };
     let Some((stem, ext)) = rest.rsplit_once('.') else { return false };
-    let Some((theme, view)) = stem.split_once('-') else { return false };
-    matches!(theme, "dark" | "light") && VIEWS.contains(&view) && matches!(ext, "jpg" | "mp4")
+    let Some((variant, view)) = stem.rsplit_once('-') else { return false };
+    is_variant_name(variant) && VIEWS.contains(&view) && matches!(ext, "jpg" | "mp4")
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -51,7 +75,7 @@ pub struct RenderStatus {
 
 #[derive(Default)]
 struct State {
-    themes: BTreeSet<String>,
+    variants: BTreeSet<Variant>,
     four_k: bool,
     kick: bool,
     reload_data: bool,
@@ -71,14 +95,14 @@ fn st() -> MutexGuard<'static, State> {
     S.get_or_init(Default::default).lock().unwrap()
 }
 
-/// Which themes TVs need now (empty = nothing to draw), and whether 4K videos are wanted.
-pub fn want(themes: BTreeSet<String>, four_k: bool) {
+/// Which looks TVs need now (empty = nothing to draw), and whether 4K videos are wanted.
+pub fn want(variants: BTreeSet<Variant>, four_k: bool) {
     let mut s = st();
-    if s.themes != themes || s.four_k != four_k {
-        let new_theme = themes.iter().any(|t| !s.themes.contains(t));
-        s.themes = themes;
+    if s.variants != variants || s.four_k != four_k {
+        let new_look = variants.iter().any(|t| !s.variants.contains(t)) || (four_k && !s.four_k);
+        s.variants = variants;
         s.four_k = four_k;
-        if new_theme {
+        if new_look {
             s.kick = true;
         }
     }
@@ -360,38 +384,39 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn payload(theme: &str, view: &str) -> String {
+fn payload(v: &Variant, view: &str, interval: u32) -> String {
     let s = st();
     let now = chrono::Local::now();
     let feeds = serde_json::to_string(&s.feeds).unwrap_or_else(|_| "[]".into());
-    let photos = serde_json::to_string(&s.photos).unwrap_or_else(|_| "[]".into());
+    let photos = if v.photos { serde_json::to_string(&s.photos).unwrap_or_else(|_| "[]".into()) } else { "[]".into() };
     format!(
-        r#"{{"type":"data","year":{},"month":{},"events":{},"tasks":[],"feeds":{},"photos":{},"photoIntervalSeconds":{},"lastRefresh":{},"theme":"{}","view":"{}"}}"#,
+        r#"{{"type":"data","year":{},"month":{},"events":{},"tasks":[],"feeds":{},"photos":{},"photoIntervalSeconds":{},"lastRefresh":{},"theme":"{}","view":"{}","textScale":{}}}"#,
         chrono::Datelike::year(&now), chrono::Datelike::month(&now), s.events_json, feeds, photos,
-        20, serde_json::to_string(&s.last_refresh_label).unwrap_or_else(|_| "null".into()), theme, view
+        interval, serde_json::to_string(&s.last_refresh_label).unwrap_or_else(|_| "null".into()), v.theme, view, v.text_pct as f64 / 100.0
     )
 }
 
 /// Draw every view for each theme in use and save the pictures (and 4K videos).
 async fn draw_all(app: &tauri::AppHandle, core: &Core) -> Result<(), String> {
-    let (themes, four_k) = {
+    let (variants, four_k) = {
         let s = st();
-        (s.themes.clone(), s.four_k)
+        (s.variants.clone(), s.four_k)
     };
     let window = ensure_window(app, four_k).await?;
     let interval = core.inner.lock().unwrap().cfg.calendar.photo_interval_secs.max(5);
     let out = dir();
-    for theme in &themes {
-        let data = payload(theme, "month").replace(r#""photoIntervalSeconds":20"#, &format!(r#""photoIntervalSeconds":{interval}"#));
+    for variant in &variants {
+        let name = variant.name();
+        let data = payload(variant, "month", interval);
         window.eval(&format!("window.__tv && window.__tv.apply({data})")).map_err(|e| e.to_string())?;
         for view in VIEWS {
             window.eval(&format!("window.__tv && (window.__tv.view('{view}'), window.__tv.tick())")).map_err(|e| e.to_string())?;
             tokio::time::sleep(Duration::from_millis(400)).await;
             let jpg = capture(&window, false).await?;
-            write_atomic(&out.join(file_name(theme, view, "jpg")), &jpg)?;
+            write_atomic(&out.join(file_name(&name, view, "jpg")), &jpg)?;
             if four_k {
                 let png = capture(&window, true).await?;
-                let target = out.join(file_name(theme, view, "mp4"));
+                let target = out.join(file_name(&name, view, "mp4"));
                 tokio::task::spawn_blocking(move || -> Result<(), String> {
                     let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| e.to_string())?.to_rgba8();
                     let (w, h) = img.dimensions();
@@ -401,6 +426,16 @@ async fn draw_all(app: &tauri::AppHandle, core: &Core) -> Result<(), String> {
                     }
                     crate::cal_video::encode_still_mp4_frames(&bgra, w & !1, h & !1, VIDEO_SECS, 1, &target)
                 }).await.map_err(|e| e.to_string())??;
+            }
+        }
+    }
+    // Looks no screen uses any more.
+    if let Ok(entries) = std::fs::read_dir(&out) {
+        for e in entries.flatten() {
+            let stale = e.metadata().and_then(|m| m.modified()).ok()
+                .and_then(|t| t.elapsed().ok()).map(|age| age > Duration::from_secs(2 * 3600)).unwrap_or(false);
+            if stale {
+                let _ = std::fs::remove_file(e.path());
             }
         }
     }
@@ -414,7 +449,7 @@ pub async fn run(app: tauri::AppHandle, core: Arc<Core>) {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let (wanted, kicked, reload) = {
             let mut s = st();
-            let r = (!s.themes.is_empty(), s.kick, s.reload_data);
+            let r = (!s.variants.is_empty(), s.kick, s.reload_data);
             s.kick = false;
             s.reload_data = false;
             r

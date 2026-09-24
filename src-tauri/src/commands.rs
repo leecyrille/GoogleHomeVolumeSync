@@ -127,10 +127,11 @@ fn display_name(core: &Core, id: &str) -> String {
 pub async fn calendar_show(core: CoreState<'_>, ids: Vec<String>) -> Result<(), String> {
     info!(?ids, "ui: show calendar");
     let core_arc: Arc<Core> = (*core).clone();
-    let opts = crate::calendar::manual_opts(&core.inner.lock().unwrap().cfg.calendar);
     let mut errors = Vec::new();
     for id in ids {
-        if let Err(e) = crate::calendar::show_on(&core_arc, &id, opts.clone(), None, false).await {
+        let small = crate::calendar::is_small_display(&core, &id);
+        let opts = crate::calendar::manual_opts(&core.inner.lock().unwrap().cfg.calendar, &id, small);
+        if let Err(e) = crate::calendar::show_on(&core_arc, &id, opts, None, false).await {
             errors.push(format!("{}: {e}", display_name(&core, &id)));
         }
     }
@@ -166,7 +167,7 @@ pub async fn calendar_screensaver(core: CoreState<'_>, id: String, on: bool) -> 
     }
     core.save_config();
     let result = if on {
-        let opts = crate::calendar::manual_opts(&core.inner.lock().unwrap().cfg.calendar);
+        let opts = crate::calendar::manual_opts(&core.inner.lock().unwrap().cfg.calendar, &id, false);
         let r = crate::calendar::show_on(&core_arc, &id, opts, None, true).await;
         if r.is_err() {
             core.inner.lock().unwrap().cfg.calendar.screensaver_tvs.retain(|t| t != &id);
@@ -200,6 +201,7 @@ pub async fn calendar_save(core: CoreState<'_>, settings: crate::config::Calenda
         if new.theme != "light" {
             new.theme = "dark".into();
         }
+        new.displays.retain(|_, d| d.text_pct >= 50 && d.text_pct <= 400);
         let changed = serde_json::to_string(&old.feeds).ok() != serde_json::to_string(&new.feeds).ok()
             || old.photo_folders != new.photo_folders
             || old.photo_interval_secs != new.photo_interval_secs;
@@ -229,9 +231,9 @@ pub async fn calendar_test_feed(url: String) -> Result<String, String> {
 
 /// Open the latest picture of a view.
 #[tauri::command]
-pub fn calendar_preview(app: tauri::AppHandle, theme: String, view: String) -> Result<(), String> {
+pub fn calendar_preview(app: tauri::AppHandle, variant: String, view: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let name = crate::cal_render::file_name(&theme, &view, "jpg");
+    let name = crate::cal_render::file_name(&variant, &view, "jpg");
     let path = crate::cal_render::dir().join(&name);
     if !crate::cal_render::is_served_name(&name) || !path.is_file() {
         return Err("There's no picture yet. Show the calendar on a TV first.".into());

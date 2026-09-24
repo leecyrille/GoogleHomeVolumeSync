@@ -77,7 +77,9 @@ interface CalSchedule {
   id: string; enabled: boolean; days: boolean[]; start: string; duration_min: number; devices: string[];
   theme: string; views: string[]; rotate_secs: number; power_on: boolean; dont_interrupt: boolean; off_after: boolean; idle_off_min: number;
 }
+interface DisplaySettings { theme: string; views: string[]; rotate_secs: number; text_pct: number; photos: boolean; }
 interface CalSettings {
+  displays: Record<string, DisplaySettings>;
   token: string; screensaver_tvs: string[]; pushed: Record<string, string>; theme: string; views: string[]; rotate_secs: number;
   four_k: boolean; feeds: CalFeed[]; photo_folders: string[]; photo_interval_secs: number; refresh_minutes: number;
   schedules: CalSchedule[]; saver_imported: boolean;
@@ -647,6 +649,21 @@ const VIEW_NAMES: Record<string, string> = { month: "Month", week: "Week", day: 
 const ROTATE_CHOICES: [number, string][] = [[0, "Don't switch"], [15, "15 seconds"], [30, "30 seconds"], [60, "1 minute"], [120, "2 minutes"], [300, "5 minutes"], [600, "10 minutes"]];
 const DURATIONS: [number, string][] = [[15, "15 min"], [30, "30 min"], [45, "45 min"], [60, "1 hour"], [90, "1½ hours"], [120, "2 hours"], [180, "3 hours"], [240, "4 hours"], [360, "6 hours"], [480, "8 hours"], [720, "12 hours"]];
 const IDLE_CHOICES = [10, 15, 20, 30, 45, 60, 90];
+const TEXT_SIZES: [number, string][] = [[75, "75%"], [100, "100% (big TV)"], [125, "125%"], [150, "150%"], [175, "175%"], [200, "200%"], [250, "250% (small display)"], [300, "300%"], [350, "350%"]];
+const calCfgOpen = new Set<string>();
+
+/** Same defaults as the app: small Google displays (Nest Hubs) get big text and the day view. */
+function displaySettings(s: CalSettings, d: Device): DisplaySettings {
+  const small = d.backend === "cast" && /hub/i.test(d.model);
+  return s.displays[d.id] ?? { theme: "default", views: small ? ["day"] : ["month"], rotate_secs: 0, text_pct: small ? 250 : 100, photos: !small };
+}
+
+/** File-name part of the pictures a display gets. */
+function variantName(s: CalSettings, ds: DisplaySettings): string {
+  const theme = ds.theme === "light" || ds.theme === "dark" ? ds.theme : s.theme;
+  return `${theme}-t${ds.text_pct}-p${ds.photos ? 1 : 0}`;
+}
+
 const PHOTO_SECS: [number, string][] = [[5, "5 seconds"], [10, "10 seconds"], [20, "20 seconds"], [30, "30 seconds"], [60, "1 minute"], [300, "5 minutes"]];
 
 /** Screens that can show the calendar picture. */
@@ -708,29 +725,38 @@ function renderCalendar() {
         <label class="chk" title="Keep the calendar on this TV as its Roku screensaver">
           <input type="checkbox" data-cal-ss="${esc(d.id)}" ${cal.screensaver_tvs.includes(d.id) ? "checked" : ""} ${blocked || busy ? "disabled" : ""}> Screensaver</label>
         ${cal.outdated.includes(d.id) ? `<button class="btn mini" data-cal-update="${esc(d.id)}" title="The TV's saved screensaver settings are out of date (theme, views, 4K or this PC's address changed)">Update TV</button>` : ""}` : "";
+    const ds = displaySettings(s, d);
+    const open = calCfgOpen.has(d.id);
+    const vname = variantName(s, ds);
+    const cfg = open ? `
+      <div class="disp-cfg" data-disp="${esc(d.id)}">
+        <div class="lbl">Theme</div><div>${seg("disp-theme", ds.theme || "default", [["default", "Usual"], ["light", "Light"], ["dark", "Dark"]])}</div>
+        <div class="lbl">Text size</div><div>${selectOf('data-disp-f="text_pct"', ds.text_pct, TEXT_SIZES)}
+          <label class="chk" style="margin-left:14px"><input type="checkbox" data-disp-f="photos" ${ds.photos ? "checked" : ""}> Photos</label></div>
+        <div class="lbl">Shows</div><div class="row wrap">${viewChecks("disp-views", ds.views)} <span class="lbl">switch</span> ${selectOf('data-disp-f="rotate_secs"', ds.rotate_secs, ROTATE_CHOICES)}</div>
+        ${cal.updated ? `<div></div><div class="cal-previews small">${ds.views.map((v) => `
+          <figure data-cal-preview="${vname}|${v}" title="Open the ${VIEW_NAMES[v]?.toLowerCase()} view">
+            <img src="http://calphoto.localhost/preview/calendar-${vname}-${v}.jpg?v=${cal.updated}" alt="" onerror="this.closest('figure').classList.add('missing')">
+            <figcaption>${VIEW_NAMES[v]}</figcaption>
+          </figure>`).join("")}</div>` : ""}
+      </div>` : "";
     return `
       <div class="cal-row">
-        <span class="cal-name">${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}</span>
+        <span class="cal-name">${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}
+          <span class="cal-look">${ds.text_pct}% · ${ds.views.map((v) => VIEW_NAMES[v]).join(", ")}</span></span>
         ${showing ? `<span class="cal-on">● Showing</span>` : ""}
         <span class="cal-acts">
           ${saver}
+          <button class="btn mini ${open ? "on" : ""}" data-cal-cfg="${esc(d.id)}" title="How this screen shows the calendar: text size, theme, views, photos">⚙</button>
           ${showing
             ? `<button class="btn mini" data-cal-stop="${esc(d.id)}" ${busy ? "disabled" : ""}>Stop</button>`
             : `<button class="btn mini primary" data-cal-show="${esc(d.id)}" ${blocked || busy ? "disabled" : ""} title="${esc(blocked)}">${busy ? "Starting…" : "Show"}</button>`}
         </span>
-      </div>`;
+      </div>${cfg}`;
   };
   const column = (title: string, ds: Device[]) => ds.length === 0 ? "" : `
       <div class="cast-col"><div class="cast-col-head"><span>${title}</span></div>${ds.map(row).join("")}</div>`;
 
-  // ----- previews -----
-  const previews = cal.updated ? `
-      <div class="cal-previews">${Object.entries(VIEW_NAMES).map(([v, label]) => `
-        <figure data-cal-preview="${v}" title="Open the ${label.toLowerCase()} view">
-          <img src="http://calphoto.localhost/preview/calendar-${s.theme}-${v}.jpg?v=${cal.updated}" alt="${label} view" onerror="this.closest('figure').classList.add('missing')">
-          <figcaption>${label}</figcaption>
-        </figure>`).join("")}
-      </div>` : "";
 
   // ----- schedules -----
   const allScreens = calendarScreens(true);
@@ -793,10 +819,9 @@ function renderCalendar() {
       <h3>Look</h3>
       <div class="cal-look">
         <div class="lbl">Theme</div><div>${seg("main-theme", s.theme, [["dark", "🌙 Dark"], ["light", "☀️ Light"]])}</div>
-        <div class="lbl">Shows</div><div class="row wrap">${viewChecks("main-views", s.views)} <span class="lbl">switch</span> ${selectOf('id="cal-rotate"', s.rotate_secs, ROTATE_CHOICES)}</div>
-        <div class="lbl">Sharpness</div><div><label class="chk"><input type="checkbox" id="cal-4k" ${s.four_k ? "checked" : ""}> 4K on Roku TVs <span class="hint-inline">(sent as a one-frame video, since Roku apps draw pictures at 1080p)</span></label></div>
+        <div class="lbl">Sharpness</div><div><label class="chk"><input type="checkbox" id="cal-4k" ${s.four_k ? "checked" : ""}> 4K on Roku TVs <span class="hint-inline">(sent as a video, since Roku apps can only draw pictures at 1080p)</span></label></div>
       </div>
-      ${previews}
+      <div class="hint">Each screen has its own text size, views and photos: use ⚙ next to it above. "Usual" theme means this one.</div>
     </section>
 
     <section class="cal-sec">
@@ -832,13 +857,30 @@ function wireCalendarPage() {
   all("[data-cal-stop]").forEach((b) => b.addEventListener("click", () => calRun(b.dataset.calStop!, "calendar_stop", { ids: [b.dataset.calStop] })));
   all<HTMLInputElement>("[data-cal-ss]").forEach((cb) => cb.addEventListener("change", () => calRun(cb.dataset.calSs!, "calendar_screensaver", { id: cb.dataset.calSs, on: cb.checked })));
   all("[data-cal-update]").forEach((b) => b.addEventListener("click", () => calRun(b.dataset.calUpdate!, "calendar_screensaver", { id: b.dataset.calUpdate, on: true })));
-  all("[data-cal-preview]").forEach((f) => f.addEventListener("click", () =>
-    invoke("calendar_preview", { theme: state.calendar!.settings.theme, view: f.dataset.calPreview }).catch((e) => alert(String(e)))));
+  all("[data-cal-preview]").forEach((f) => f.addEventListener("click", () => {
+    const [variant, view] = f.dataset.calPreview!.split("|");
+    invoke("calendar_preview", { variant, view }).catch((e) => alert(String(e)));
+  }));
 
   // look
   segValue(content, "main-theme", (v) => edit((s) => { s.theme = v; }));
-  all<HTMLInputElement>('[data-views="main-views"] input').forEach((cb) => cb.addEventListener("change", () => edit((s) => { s.views = viewsFrom(content, "main-views"); })));
-  q<HTMLSelectElement>("#cal-rotate")?.addEventListener("change", (e) => edit((s) => { s.rotate_secs = Number((e.target as HTMLSelectElement).value); }));
+  // per-display settings
+  all("[data-cal-cfg]").forEach((b) => b.addEventListener("click", () => {
+    const id = b.dataset.calCfg!;
+    if (calCfgOpen.has(id)) calCfgOpen.delete(id); else calCfgOpen.add(id);
+    render();
+  }));
+  all(".disp-cfg").forEach((panel) => {
+    const id = (panel as HTMLElement).dataset.disp!;
+    const dev = state.devices.find((x) => x.id === id);
+    if (!dev) return;
+    const upd = (f: (ds: DisplaySettings) => void) => edit((s) => { const ds = displaySettings(s, dev); f(ds); s.displays[id] = ds; });
+    segValue(panel, "disp-theme", (v) => upd((ds) => { ds.theme = v; }));
+    panel.querySelector<HTMLSelectElement>('[data-disp-f="text_pct"]')?.addEventListener("change", (e) => upd((ds) => { ds.text_pct = Number((e.target as HTMLSelectElement).value); }));
+    panel.querySelector<HTMLSelectElement>('[data-disp-f="rotate_secs"]')?.addEventListener("change", (e) => upd((ds) => { ds.rotate_secs = Number((e.target as HTMLSelectElement).value); }));
+    panel.querySelector<HTMLInputElement>('[data-disp-f="photos"]')?.addEventListener("change", (e) => upd((ds) => { ds.photos = (e.target as HTMLInputElement).checked; }));
+    all<HTMLInputElement>('[data-views="disp-views"] input', panel).forEach((cb) => cb.addEventListener("change", () => upd((ds) => { ds.views = viewsFrom(panel, "disp-views"); })));
+  });
   q<HTMLInputElement>("#cal-4k")?.addEventListener("change", (e) => edit((s) => { s.four_k = (e.target as HTMLInputElement).checked; }));
   q<HTMLSelectElement>("#cal-photo-secs")?.addEventListener("change", (e) => edit((s) => { s.photo_interval_secs = Number((e.target as HTMLSelectElement).value); }));
 

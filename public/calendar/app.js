@@ -159,7 +159,8 @@ function render() {
     const a = days[0], b = days[6];
     setTitle(`${monthName(a)} ${a.getDate()} – ${a.getMonth() === b.getMonth() ? '' : monthName(b) + ' '}${b.getDate()}`, String(b.getFullYear()));
   } else if (view === 'day') {
-    setTitle(now.toLocaleString(undefined, { weekday: 'long' }), now.toLocaleString(undefined, { month: 'long', day: 'numeric' }));
+    const big = document.documentElement.classList.contains('big-text');
+    setTitle(now.toLocaleString(undefined, { weekday: 'long' }), now.toLocaleString(undefined, { month: big ? 'short' : 'long', day: 'numeric' }));
   } else {
     setTitle(monthName(new Date(year, month - 1, 1)), String(year));
   }
@@ -272,9 +273,11 @@ function renderGrid(grid, { days, weeks }, month, chipsByDay, spans) {
 /* Day: today's agenda, large, with tomorrow beside it. */
 function renderDay(grid, now, chipsByDay, spans) {
   grid.style.gridTemplateRows = 'minmax(0, 1fr)';
-  grid.style.gridTemplateColumns = '2fr 1fr';
+  // Small screens (big text): today only, full width.
+  const bigText = document.documentElement.classList.contains('big-text');
+  grid.style.gridTemplateColumns = bigText ? '1fr' : '2fr 1fr';
   const days = [new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-                new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)];
+                new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)].slice(0, bigText ? 1 : 2);
   days.forEach((d, i) => {
     const key = dateKey(d);
     const cell = el('div', 'cell agenda' + (i === 0 ? ' today' : ' tomorrow'));
@@ -326,13 +329,31 @@ function fitEvents() {
   setScale(1);
   if (!overflows()) return;
 
-  let lo = 0.35, hi = 1;                 // find the largest scale that fits
+  // On TVs the chosen text size wins: shrink a little at most, then "+N more".
+  let lo = IS_TV ? 0.8 : 0.35, hi = 1;   // find the largest scale that fits
   for (let i = 0; i < 9; i++) {
     const mid = (lo + hi) / 2;
     setScale(mid);
     if (overflows()) hi = mid; else lo = mid;
   }
   setScale(lo);
+  if (IS_TV) addMoreLabels();
+}
+
+/* Days with more events than fit: hide the last ones behind "+N more". */
+function addMoreLabels() {
+  for (const events of document.querySelectorAll('#grid .events')) {
+    const chips = [...events.querySelectorAll('.chip')];
+    if (events.scrollHeight <= events.clientHeight + 1 || !chips.length) continue;
+    const more = el('div', 'more');
+    events.append(more);
+    let hidden = 0;
+    while (events.scrollHeight > events.clientHeight + 1 && hidden < chips.length) {
+      chips[chips.length - 1 - hidden].style.display = 'none';
+      hidden++;
+      more.textContent = `+${hidden} more`;
+    }
+  }
 }
 
 /* ============================== tasks ============================== */
@@ -517,6 +538,9 @@ function createSlideshow(container) {
 
 function applyPayload(data) {
   payload = data;
+  // TV mode: text size for the screen it's meant for (1 = a big TV).
+  document.documentElement.style.setProperty('--k', String(data.textScale || 1));
+  document.documentElement.classList.toggle('big-text', (data.textScale || 1) >= 1.75);
   document.documentElement.classList.toggle('light', payload.theme === 'light');
   render();
 }
@@ -646,5 +670,6 @@ function mockPayload() {
     photoIntervalSeconds: 6, lastRefresh: fmtTime(now),
     theme: new URLSearchParams(location.search).get('theme') || 'dark', // preview: ?theme=light
     view: new URLSearchParams(location.search).get('view') || 'month',  // TV preview: ?tv=1&view=week
+    textScale: Number(new URLSearchParams(location.search).get('k')) || 1,  // TV preview: &k=2.5
   };
 }

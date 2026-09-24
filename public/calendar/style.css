@@ -446,7 +446,7 @@ html.tv .tile img { transition: none; }   /* pictures are taken every minute: ne
   border-bottom: 1px solid var(--line);
 }
 .big-time {
-  font-size: 6.1vw;
+  font-size: calc(var(--photos-w) * 0.305);
   font-weight: 300;
   line-height: 0.95;
   letter-spacing: -0.02em;
@@ -455,13 +455,13 @@ html.tv .tile img { transition: none; }   /* pictures are taken every minute: ne
 }
 .big-day {
   margin-top: 1.4vh;
-  font-size: 1.75vw;
+  font-size: calc(var(--photos-w) * 0.0875);
   font-weight: 560;
   color: var(--text);
 }
 .big-date {
   margin-top: 0.3vh;
-  font-size: 1.45vw;
+  font-size: calc(var(--photos-w) * 0.0725);
   font-weight: 420;
   color: var(--dim);
 }
@@ -489,3 +489,39 @@ html.tv .tile img { transition: none; }   /* pictures are taken every minute: ne
 .cell.tomorrow .agenda-label { color: var(--faint); }
 .agenda-date { font-size: 1.1vw; color: var(--dim); }
 .agenda-empty { color: var(--faint); font-weight: 400; }
+
+/* ---------- TV mode: text size (--k, from the app per screen: 1 = big TV, 2.5 = small display) ---------- */
+html.tv {
+  --k: 1;
+  --ev-fs: calc(clamp(10px, 0.74vw, 30px) * var(--k));
+  --photos-w: min(calc(20vw * (0.75 + var(--k) * 0.25)), 32vw);
+}
+html.tv #cal-header h1 { font-size: calc(1.9vw * var(--k)); }
+html.tv .legend-item { font-size: calc(0.78vw * var(--k)); gap: calc(0.35vw * var(--k)); }
+html.tv .legend-item .dot { width: calc(0.5vw * var(--k)); height: calc(0.5vw * var(--k)); }
+html.tv #dow-row div { font-size: calc(0.72vw * var(--k)); letter-spacing: 0.12em; }
+html.tv .day-num { font-size: calc(0.95vw * var(--k)); line-height: calc(1.5vw * var(--k)); min-width: calc(1.5vw * var(--k)); }
+html.tv #status { font-size: calc(0.7vw * var(--k)); }
+html.tv #root[data-view="week"] { --ev-fs: calc(clamp(12px, 1.12vw, 46px) * var(--k)); }
+html.tv #root[data-view="week"] .day-num { font-size: calc(1.5vw * var(--k)); line-height: calc(2.2vw * var(--k)); min-width: calc(2.2vw * var(--k)); }
+html.tv #root[data-view="day"] { --ev-fs: calc(clamp(16px, 1.75vw, 72px) * var(--k)); }
+html.tv #root[data-view="day"] .cell.tomorrow { --ev-fs: calc(clamp(12px, 1.2vw, 48px) * var(--k)); }
+html.tv .agenda-label, html.tv .agenda-date { font-size: calc(1.1vw * var(--k)); }
+#root[data-view="week"] .bar { white-space: normal; }
+.more {
+  flex: none;
+  padding: 0.05em 0.5em;
+  color: var(--dim);
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* big text (small screens): keep only what reads at a glance */
+html.tv #status { font-size: calc(0.7vw * min(var(--k), 1.5)); }
+html.big-text #legend,
+html.big-text #tasks { display: none; }
+html.big-text #root { grid-template-areas: "cal photos"; grid-template-columns: minmax(0, 1fr) var(--photos-w); }
+html.big-text #cal-header h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.big-text #root[data-view="month"] .chip .t { display: none; }
+html.big-text #root[data-view="day"] .chip { flex-direction: column; align-items: stretch; gap: 0.05em; }
+html.big-text .agenda-head { display: none; }

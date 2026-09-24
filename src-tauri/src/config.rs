@@ -79,8 +79,8 @@ pub struct CalendarConfig {
     /// Seconds between views (0 = stay on the first).
     #[serde(default)]
     pub rotate_secs: u32,
-    /// Sharp 4K on Roku TVs (sent as a one-frame video).
-    #[serde(default)]
+    /// Sharp 4K on Roku TVs (sent as a video of the picture).
+    #[serde(default = "default_true")]
     pub four_k: bool,
     #[serde(default)]
     pub feeds: Vec<crate::cal_feeds::FeedCfg>,
@@ -95,6 +95,42 @@ pub struct CalendarConfig {
     /// The PactoTech Calendar Saver's settings were copied once already.
     #[serde(default)]
     pub saver_imported: bool,
+    /// How each screen shows it: device id -> settings (screens not listed use defaults).
+    #[serde(default)]
+    pub displays: HashMap<String, DisplaySettings>,
+}
+
+/// One screen's calendar look.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DisplaySettings {
+    /// "default" (the usual theme), "light" or "dark"
+    #[serde(default)]
+    pub theme: String,
+    #[serde(default = "default_views")]
+    pub views: Vec<String>,
+    #[serde(default)]
+    pub rotate_secs: u32,
+    /// Text size in percent: 100 suits a big TV; small displays need 200-300.
+    #[serde(default = "default_text_pct")]
+    pub text_pct: u32,
+    #[serde(default = "default_true")]
+    pub photos: bool,
+}
+fn default_text_pct() -> u32 {
+    100
+}
+
+impl DisplaySettings {
+    /// Defaults for a screen: small Google displays get big text and the day view.
+    pub fn default_for(small: bool) -> Self {
+        DisplaySettings {
+            theme: "default".into(),
+            views: if small { vec!["day".into()] } else { default_views() },
+            rotate_secs: 0,
+            text_pct: if small { 250 } else { 100 },
+            photos: !small,
+        }
+    }
 }
 fn default_dark() -> String {
     "dark".into()
@@ -112,8 +148,9 @@ impl Default for CalendarConfig {
     fn default() -> Self {
         CalendarConfig {
             token: String::new(), screensaver_tvs: Vec::new(), pushed: HashMap::new(), theme: default_dark(),
-            views: default_views(), rotate_secs: 0, four_k: false, feeds: Vec::new(), photo_folders: Vec::new(),
+            views: default_views(), rotate_secs: 0, four_k: true, feeds: Vec::new(), photo_folders: Vec::new(),
             photo_interval_secs: default_photo_secs(), refresh_minutes: default_refresh(), schedules: Vec::new(), saver_imported: false,
+            displays: HashMap::new(),
         }
     }
 }

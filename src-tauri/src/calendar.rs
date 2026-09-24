@@ -7,8 +7,8 @@
 //! one, while Roku TVs (our player channel) fetch their own and switch views
 //! with Up / Down on the remote.
 
-use crate::cal_render::{file_name, VIEWS};
-use crate::config::{CalSchedule, CalendarConfig};
+use crate::cal_render::{file_name, Variant, VIEWS};
+use crate::config::{CalSchedule, CalendarConfig, DisplaySettings};
 use crate::core::Core;
 use crate::types::{Backend, CastItem, DeviceCmd};
 use chrono::{Datelike, Local, TimeZone};
@@ -27,7 +27,7 @@ const ELSEWHERE_LIMIT: u8 = 4;
 /// How a screen shows the calendar.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShowOpts {
-    pub theme: String,
+    pub variant: Variant,
     pub views: Vec<String>,
     /// Seconds between views (0 = stay on the first).
     pub rotate: u32,
@@ -94,13 +94,36 @@ pub fn view(cfg: &CalendarConfig) -> CalendarView {
     }
 }
 
-pub fn manual_opts(cfg: &CalendarConfig) -> ShowOpts {
-    ShowOpts { theme: cfg.theme.clone(), views: clean_views(&cfg.views), rotate: cfg.rotate_secs }
+/// Small Google displays (Nest Hubs) need big text.
+pub fn is_small_display(core: &Core, id: &str) -> bool {
+    let inner = core.inner.lock().unwrap();
+    inner.devices.get(id).map(|e| e.info.backend == Backend::Cast && e.info.model.to_ascii_lowercase().contains("hub")).unwrap_or(false)
 }
 
-fn schedule_opts(cfg: &CalendarConfig, s: &CalSchedule) -> ShowOpts {
+pub fn display_settings(cfg: &CalendarConfig, id: &str, small: bool) -> DisplaySettings {
+    cfg.displays.get(id).cloned().unwrap_or_else(|| DisplaySettings::default_for(small))
+}
+
+fn pick_theme(cfg: &CalendarConfig, wanted: &str) -> String {
+    if wanted == "light" || wanted == "dark" { wanted.to_string() } else { cfg.theme.clone() }
+}
+
+/// How a screen shows the calendar when shown by hand (or as a screensaver).
+pub fn manual_opts(cfg: &CalendarConfig, id: &str, small: bool) -> ShowOpts {
+    let d = display_settings(cfg, id, small);
     ShowOpts {
-        theme: if s.theme == "light" || s.theme == "dark" { s.theme.clone() } else { cfg.theme.clone() },
+        variant: Variant { theme: pick_theme(cfg, &d.theme), text_pct: d.text_pct.clamp(50, 400), photos: d.photos },
+        views: clean_views(&d.views),
+        rotate: d.rotate_secs,
+    }
+}
+
+/// A scheduled time: its own theme and views, the screen's own text size and photos.
+fn schedule_opts(cfg: &CalendarConfig, s: &CalSchedule, id: &str, small: bool) -> ShowOpts {
+    let d = display_settings(cfg, id, small);
+    let theme = if s.theme == "light" || s.theme == "dark" { s.theme.clone() } else { pick_theme(cfg, &d.theme) };
+    ShowOpts {
+        variant: Variant { theme, text_pct: d.text_pct.clamp(50, 400), photos: d.photos },
         views: clean_views(&s.views),
         rotate: s.rotate_secs,
     }
@@ -130,7 +153,7 @@ pub fn ensure_token(core: &Core) -> String {
 /// The Roku player's launch parameters for the calendar.
 fn roku_params(base: &str, o: &ShowOpts, four_k: bool) -> String {
     format!("cal={}&theme={}&views={}&rotate={}&q={}&every=60",
-        crate::backends::roku_player::q(base), o.theme, o.views.join(","), o.rotate, if four_k { "4k" } else { "hd" })
+        crate::backends::roku_player::q(base), o.variant.name(), o.views.join(","), o.rotate, if four_k { "4k" } else { "hd" })
 }
 
 // ---------------- showing and stopping ----------------
@@ -214,20 +237,20 @@ pub fn touched(ip: std::net::IpAddr) {
 
 /// Tell the renderer what to draw.
 fn update_wanted(core: &Core) {
-    let (screensaver, default_theme, four_k_on, roku_ids) = {
+    let (saver_variants, four_k_on, roku_ids) = {
         let inner = core.inner.lock().unwrap();
         let c = &inner.cfg.calendar;
         let rokus: HashSet<String> = inner.devices.iter().filter(|(_, e)| e.info.backend == Backend::Roku).map(|(id, _)| id.clone()).collect();
-        (!c.screensaver_tvs.is_empty(), c.theme.clone(), c.four_k, rokus)
+        let saver: Vec<Variant> = c.screensaver_tvs.iter().map(|id| manual_opts(c, id, false).variant).collect();
+        (saver, c.four_k, rokus)
     };
     let r = rt();
-    let mut themes: BTreeSet<String> = r.showing.values().map(|s| s.opts.theme.clone()).collect();
-    if screensaver {
-        themes.insert(default_theme);
-    }
+    let mut variants: BTreeSet<Variant> = r.showing.values().map(|s| s.opts.variant.clone()).collect();
+    let screensaver = !saver_variants.is_empty();
+    variants.extend(saver_variants);
     let roku_in_use = screensaver || r.showing.keys().any(|id| roku_ids.contains(id));
     drop(r);
-    crate::cal_render::want(themes, four_k_on && roku_in_use);
+    crate::cal_render::want(variants, four_k_on && roku_in_use);
 }
 
 /// Only the TVs showing the calendar (or using it as a screensaver) may fetch it.
@@ -255,7 +278,7 @@ async fn push_pictures(core: &Core) {
         let r = rt();
         r.showing.iter()
             .filter(|(id, _)| inner.devices.get(*id).map(|e| e.info.backend == Backend::Cast).unwrap_or(false))
-            .map(|(id, s)| (id.clone(), s.ip.clone(), file_name(&s.opts.theme, &current_view(s), "jpg")))
+            .map(|(id, s)| (id.clone(), s.ip.clone(), file_name(&s.opts.variant.name(), &current_view(s), "jpg")))
             .collect()
     };
     for (id, ip, name) in targets {
@@ -392,7 +415,7 @@ pub async fn step(core: &Arc<Core>) {
             let ip = core.inner.lock().unwrap().devices.get(id).map(|e| e.info.ip.clone());
             let Some(ip) = ip else { continue };
             if let Ok(base) = crate::media_server::live_url(&token, "", &ip).await {
-                if cfg.pushed.get(id) != Some(&roku_params(&base, &manual_opts(&cfg), cfg.four_k)) {
+                if cfg.pushed.get(id) != Some(&roku_params(&base, &manual_opts(&cfg, id, false), cfg.four_k)) {
                     outdated.push(id.clone());
                 }
             }
@@ -476,7 +499,9 @@ async fn run_schedules(core: &Arc<Core>, devs: &HashMap<String, Dev>) -> bool {
                     continue; // try again on the next check
                 }
                 w.shown = true;
-                actions.push((key.clone(), id.clone(), schedule_opts(&cfg, s)));
+                drop(r);
+                let small = is_small_display(core, id);
+                actions.push((key.clone(), id.clone(), schedule_opts(&cfg, s, id, small)));
             }
         }
     }
