@@ -229,7 +229,7 @@ function sideDragging(): boolean {
 function renderDevices() {
   const stale = (d: Device) => !d.online && Date.now() / 1000 - d.last_seen > 86400;
   const html = `
-    <h2>Devices <span class="sub">${state.devices.filter((d) => d.online).length} online / ${state.devices.length} known</span></h2>
+    <h2>Devices</h2>
     <div class="toolbar">
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
