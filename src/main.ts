@@ -71,7 +71,8 @@ interface Group {
 interface ScheduleTarget { target_id: string; is_group: boolean; volume_pct: number; }
 interface Sched { id: string; enabled: boolean; days: boolean[]; time: string; targets: ScheduleTarget[]; }
 interface Settings { start_with_windows: boolean; auto_update: boolean; }
-interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; }
+interface SyncView { members: string[]; paused: boolean; spread_ms?: number | null; status: string; }
+interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; }
 
 let state: Snapshot = { devices: [], groups: [], schedules: [], settings: { start_with_windows: false, auto_update: false } };
 let view = "devices";
@@ -151,14 +152,21 @@ function sideSlider(key: string, label: string, level: number, showLabel: boolea
 
 function renderSide() {
   const sessions = nowPlaying();
-  if (sessions.length === 0) { sideEl.innerHTML = ""; return; }
+  if (sessions.length === 0 && !state.sync) { sideEl.innerHTML = ""; return; }
   const shown = sessions.slice(0, 3);
   const items = sideVolItems(sessions);
   const averaged = items.length > MAX_SLIDERS;
   const avg = items.reduce((a, i) => a + i.level, 0) / Math.max(1, items.length);
 
+  const sync = state.sync;
+  const syncBox = sync ? `
+    <div class="side-sync">
+      <div><b>⟲ In sync</b> · ${sync.members.length} devices</div>
+      <div class="side-sub">${esc(sync.status)}${sync.spread_ms != null && !sync.paused ? ` · within ${(sync.spread_ms / 1000).toFixed(2)} s` : ""}</div>
+      <button class="btn mini" id="stop-sync">Stop syncing</button>
+    </div>` : "";
   sideEl.innerHTML = `
-    <div class="side-head">Now Casting</div>
+    <div class="side-head">Now Casting</div>${syncBox}
     ${shown.map((d) => {
       const m = d.media!;
       const playing = isPlaying(m);
@@ -195,6 +203,7 @@ function renderSide() {
       </div>
       ${averaged ? `<div class="side-note">Average of ${items.length} sync groups. Moving it scales them all up or down together.</div>` : ""}` : ""}`;
 
+  document.getElementById("stop-sync")?.addEventListener("click", () => invoke("stop_sync"));
   sideEl.querySelectorAll<HTMLElement>(".side-np").forEach((el) => {
     const id = el.dataset.np!;
     el.querySelectorAll<HTMLElement>("[data-np-act]").forEach((b) =>
@@ -301,15 +310,50 @@ function castPanel(): string {
       <label>Play on
         <select id="cast-target">${targets.map((d) => `<option value="${esc(d.id)}" ${d.id === castTarget ? "selected" : ""}>${esc(label(d))}</option>`).join("")}</select>
       </label>
-      <button class="btn" id="cast-files" ${targets.length ? "" : "disabled"}>Choose files…</button>
+      <button class="btn primary" id="cast-files" ${targets.length ? "" : "disabled"} title="${esc(capabilityNote(targets.find((d) => d.id === castTarget)))}">Play Audio, Video or Image</button>
       <button class="btn" id="cast-link" ${targets.length ? "" : "disabled"}>Play a link…</button>
+      ${syncSection(targets)}
       <div class="hint">Videos, music and pictures play on TVs, Nest Hubs and Chromecasts. Speakers and speaker groups play music and the sound of videos. Several files play in order, a same-named .srt or .vtt next to a video becomes subtitles, and several pictures become a slideshow (8 seconds each). Files are shared only with the device you pick, for 12 hours.</div>
     </div>`;
 }
 
+/** What the device can't do, for the button tooltip. */
+function capabilityNote(d?: Device): string {
+  if (!d) return "";
+  return canShowPictures(d) ? "Audio, video or pictures from this PC" : "This device has no screen: audio, and the sound of videos";
+}
+
+const syncPicked = new Set<string>();
+
+/** Pick several devices and one file; they play in step. */
+function syncSection(targets: Device[]): string {
+  if (targets.length < 2) return "";
+  return `
+      <div class="sync-box">
+        <div class="sync-title">Play in sync on several devices</div>
+        <div class="member-list">
+          ${targets.map((d) => `<label class="chk"><input type="checkbox" data-sync-pick="${esc(d.id)}" ${syncPicked.has(d.id) ? "checked" : ""}> ${esc(displayName(d))}</label>`).join("")}
+        </div>
+        <button class="btn" id="sync-play" ${syncPicked.size >= 2 ? "" : "disabled"}>Play Audio or Video in sync</button>
+        <span class="hint-inline">Pausing, resuming or skipping on any one of them moves the rest, and small drifts are evened out.</span>
+      </div>`;
+}
+
 function wireCastPanel() {
+  document.querySelectorAll<HTMLInputElement>("[data-sync-pick]").forEach((cb) => cb.addEventListener("change", () => {
+    if (cb.checked) syncPicked.add(cb.dataset.syncPick!); else syncPicked.delete(cb.dataset.syncPick!);
+    const btn = document.getElementById("sync-play") as HTMLButtonElement | null;
+    if (btn) btn.disabled = syncPicked.size < 2;
+  }));
+  document.getElementById("sync-play")?.addEventListener("click", async () => {
+    const ids = [...syncPicked].filter((id) => state.devices.some((d) => d.id === id && d.online));
+    if (ids.length < 2) return;
+    const picked = await open({ multiple: false, filters: [{ name: "Audio or video", extensions: [...CAST_VIDEO, ...CAST_AUDIO] }] });
+    if (typeof picked !== "string") return;
+    try { await invoke("play_synced", { ids, path: picked }); } catch (e) { alert(String(e)); }
+  });
   const sel = document.getElementById("cast-target") as HTMLSelectElement | null;
-  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); });
+  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); render(); });
   document.getElementById("cast-files")?.addEventListener("click", () => {
     const d = state.devices.find((x) => x.id === castTarget);
     if (d) chooseAndPlay(d);
@@ -440,7 +484,7 @@ function playRow(d: Device): string {
   if (tv.player_ready) {
     return `
     <div class="tv-play">
-      <button class="btn" data-act="play-files" title="Videos, music or pictures from this PC. Several play in order (pictures as a slideshow); a same-named .srt or .vtt comes along as subtitles.">▶ Play files…</button>
+      <button class="btn" data-act="play-files" title="Videos, music or pictures from this PC. Several play in order (pictures as a slideshow); a same-named .srt or .vtt comes along as subtitles.">▶ Play Audio, Video or Image</button>
       <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>
     </div>`;
   }

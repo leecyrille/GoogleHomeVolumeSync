@@ -130,7 +130,7 @@ impl LgActor {
                 cmd = self.cmd_rx.recv() => {
                     let cmd = match cmd { Some(c) => c, None => return SessionEnd::Shutdown };
                     if matches!(cmd, DeviceCmd::Shutdown) { return SessionEnd::Shutdown; }
-                    if !registered || matches!(cmd, DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Cast(_)) { continue; }
+                    if !registered || matches!(cmd, DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Cast(_) | DeviceCmd::PollMedia) { continue; }
                     info!(id=%self.id, name=%self.name, ?cmd, "lg: sending command");
                     req_id += 1;
                     let (uri, payload) = match cmd {
@@ -141,7 +141,7 @@ impl LgActor {
                         DeviceCmd::Next => ("ssap://media.controls/fastForward", json!({})),
                         DeviceCmd::Prev => ("ssap://media.controls/rewind", json!({})),
                         DeviceCmd::Refresh => ("ssap://audio/getVolume", json!({})),
-                        DeviceCmd::Shutdown | DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Cast(_) => unreachable!(),
+                        DeviceCmd::Shutdown | DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Cast(_) | DeviceCmd::PollMedia => unreachable!(),
                     };
                     let msg = json!({"type":"request","id":format!("req_{req_id}"),"uri":uri,"payload":payload});
                     if ws.send(Message::text(msg.to_string())).await.is_err() {

@@ -29,6 +29,8 @@ pub struct CoreInner {
     pub cfg_dirty: bool,
     /// What the tray's now-playing section was last built from.
     pub tray_sig: String,
+    /// A file playing in step across several devices, if any.
+    pub sync: Option<crate::sync_play::SyncSession>,
 }
 
 /// An active playback session, for the tray's now-playing section.
@@ -54,6 +56,15 @@ pub struct Snapshot {
     pub groups: Vec<AppGroup>,
     pub schedules: Vec<ScheduleEvent>,
     pub settings: crate::config::Settings,
+    pub sync: Option<SyncView>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SyncView {
+    pub members: Vec<String>,
+    pub paused: bool,
+    pub spread_ms: Option<u64>,
+    pub status: String,
 }
 
 pub fn now_ts() -> i64 {
@@ -71,7 +82,7 @@ impl Core {
         }
         info!(count = devices.len(), "core: loaded known devices from config");
         Core {
-            inner: Mutex::new(CoreInner { cfg, devices, pending: HashMap::new(), cfg_dirty: false, tray_sig: String::new() }),
+            inner: Mutex::new(CoreInner { cfg, devices, pending: HashMap::new(), cfg_dirty: false, tray_sig: String::new(), sync: None }),
             event_tx,
             lg_key_tx,
             app,
@@ -118,6 +129,12 @@ impl Core {
             groups: inner.cfg.groups.clone(),
             schedules: inner.cfg.schedules.clone(),
             settings: inner.cfg.settings.clone(),
+            sync: inner.sync.as_ref().map(|s| SyncView {
+                members: s.members.clone(),
+                paused: s.paused,
+                spread_ms: s.spread_ms,
+                status: s.status.clone(),
+            }),
         }
     }
 

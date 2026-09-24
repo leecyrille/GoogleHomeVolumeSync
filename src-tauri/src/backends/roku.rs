@@ -175,6 +175,12 @@ impl RokuActor {
                             self.poll_status(&client, &base, &mut online, &mut last).await;
                         }
                         DeviceCmd::Cast(_) => {}
+                        DeviceCmd::PollMedia => {
+                            if let Some(media) = read_media(&client, &base, &last.tv).await {
+                                last.media = Some(media.clone());
+                                let _ = self.events.send(CoreEvent::MediaChanged { id: self.id.clone(), media: Some(media) }).await;
+                            }
+                        }
                         DeviceCmd::Resync => {
                             last.inputs_at = None;
                             self.poll_status(&client, &base, &mut online, &mut last).await;
@@ -347,7 +353,9 @@ impl RokuActor {
             supports_transport: true,
             album: None,
             image: showing_icon,
-            ..Default::default()
+            position_ms,
+            duration_ms,
+            position_at: position_ms.map(|_| unix_ms()),
         });
         let changed = match (&media, &last.media) {
             (Some(a), Some(b)) => a.state != b.state || a.app != b.app,
@@ -792,4 +800,30 @@ async fn read_volume(client: &reqwest::Client, base: &str) -> Option<(u8, bool)>
     let vol: u8 = xml_tag(global, "volume")?.parse().ok()?;
     let muted = xml_tag(global, "muted").as_deref() == Some("true");
     Some((vol.min(100), muted))
+}
+
+/// Playback state and position from /query/media-player, as a media session.
+async fn read_media(client: &reqwest::Client, base: &str, tv: &TvStatus) -> Option<MediaInfo> {
+    let x = get_text(client, &format!("{base}/query/media-player")).await?;
+    let state = x.split("<player").nth(1)
+        .and_then(|c| c.split_once('>'))
+        .and_then(|(attrs, _)| xml_attr(attrs, "state"))
+        .unwrap_or_default();
+    let state = match state.as_str() {
+        "play" => "PLAYING",
+        "pause" => "PAUSED",
+        "buffer" | "startup" => "BUFFERING",
+        _ => return None,
+    };
+    let position_ms = xml_tag(&x, "position").and_then(|v| parse_ms(&v));
+    Some(MediaInfo {
+        state: state.into(),
+        app: tv.showing.clone(),
+        supports_transport: true,
+        image: tv.showing_icon.clone(),
+        position_ms,
+        duration_ms: xml_tag(&x, "duration").and_then(|v| parse_ms(&v)),
+        position_at: position_ms.map(|_| unix_ms()),
+        ..Default::default()
+    })
 }

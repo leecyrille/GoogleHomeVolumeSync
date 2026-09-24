@@ -173,7 +173,9 @@ impl CastActor {
         wr: &mut WriteHalf<Stream>,
         state: &mut SessionState,
     ) -> std::io::Result<()> {
-        info!(id=%self.id, name=%self.name, ?cmd, "cast: sending command");
+        if !matches!(cmd, DeviceCmd::PollMedia) {
+            info!(id=%self.id, name=%self.name, ?cmd, "cast: sending command");
+        }
         match cmd {
             DeviceCmd::SetVolume(level) => {
                 send(wr, &self.id, "receiver-0", NS_RECEIVER,
@@ -221,6 +223,10 @@ impl CastActor {
                 send(wr, &self.id, "receiver-0", NS_RECEIVER,
                     &json!({"type":"LAUNCH","requestId":next_req_id(),"appId":DEFAULT_MEDIA_RECEIVER})).await
             }
+            DeviceCmd::PollMedia => match state.media_transport_id.as_ref() {
+                Some(tid) => send(wr, &self.id, tid, NS_MEDIA, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await,
+                None => Ok(()),
+            },
             DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Resync | DeviceCmd::Shutdown => Ok(()),
         }
     }

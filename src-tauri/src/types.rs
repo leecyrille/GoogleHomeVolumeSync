@@ -102,6 +102,8 @@ pub enum DeviceCmd {
     Resync,
     /// Play these on a Google Cast device, in order.
     Cast(Vec<CastItem>),
+    /// Report the current playback position now (used by synced playback).
+    PollMedia,
     Shutdown,
 }
 

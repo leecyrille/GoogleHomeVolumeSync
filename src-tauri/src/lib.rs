@@ -4,6 +4,7 @@ mod commands;
 mod config;
 mod core;
 mod media_server;
+mod sync_play;
 mod tray;
 mod types;
 
@@ -58,6 +59,8 @@ pub fn run() {
             commands::roku_install_player,
             commands::play_files,
             commands::play_url,
+            commands::play_synced,
+            commands::stop_sync,
             commands::recalibrate_roku,
             commands::save_groups,
             commands::set_group_volume,

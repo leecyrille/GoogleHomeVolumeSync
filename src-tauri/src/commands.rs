@@ -212,6 +212,92 @@ pub async fn play_files(core: CoreState<'_>, id: String, paths: Vec<String>) -> 
     Ok(())
 }
 
+static SYNC_IDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Play one file on several devices at once and keep them in step.
+#[tauri::command]
+pub async fn play_synced(core: CoreState<'_>, ids: Vec<String>, path: String) -> Result<(), String> {
+    use crate::backends::roku_player::{sidecar_subtitles, stream_format, Item};
+    let path = std::path::PathBuf::from(path);
+    info!(ids=?ids, file=%path.display(), "ui: play in sync");
+    if ids.len() < 2 {
+        return Err("Pick at least two devices to play in sync.".into());
+    }
+    let content_type = crate::media_server::content_type(&path).to_string();
+    if !(content_type.starts_with("video/") || content_type.starts_with("audio/")) {
+        return Err("Synced playback works with a video or music file.".into());
+    }
+    // Stop any earlier session first.
+    core.inner.lock().unwrap().sync = None;
+
+    for id in &ids {
+        let (backend, ip) = device_backend(&core, id)?;
+        match backend {
+            Backend::Cast => {
+                let subtitles = if content_type.starts_with("video/") {
+                    match sidecar_subtitles(&path).and_then(|s| crate::media_server::subtitles_as_vtt(&s)) {
+                        Some(vtt) => Some(crate::media_server::share(&vtt, &ip).await?),
+                        None => None,
+                    }
+                } else {
+                    None
+                };
+                let item = crate::types::CastItem {
+                    url: crate::media_server::share(&path, &ip).await?,
+                    title: path.file_stem().and_then(|s| s.to_str()).unwrap_or("Media").to_string(),
+                    content_type: content_type.clone(),
+                    subtitles,
+                    autoplay: false,
+                };
+                core.send_cmd(id, DeviceCmd::Cast(vec![item]));
+            }
+            Backend::Roku => {
+                let fmt = stream_format(&path).ok_or("Roku TVs can't play this file.")?;
+                let ip = tv_ready(&core, id).await?;
+                if crate::backends::roku_player::needs_upgrade(&ip).await {
+                    let pw = core.inner.lock().unwrap().cfg.roku_dev_passwords.get(id).cloned()
+                        .ok_or("A Roku TV needs its player updated. Run Set up video playback on it again.")?;
+                    crate::backends::roku_player::install(&ip, &pw).await?;
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+                let subtitles = match sidecar_subtitles(&path) {
+                    Some(s) => Some(crate::media_server::share(&s, &ip).await?),
+                    None => None,
+                };
+                let item = Item {
+                    url: crate::media_server::share(&path, &ip).await?,
+                    title: path.file_stem().and_then(|s| s.to_str()).unwrap_or("Video").to_string(),
+                    fmt,
+                    subtitles,
+                    autoplay: false,
+                };
+                crate::backends::roku_player::play(&ip, &[item]).await?;
+            }
+            _ => return Err("Synced playback works with Google Cast devices and Roku TVs.".into()),
+        }
+    }
+
+    let session_id = SYNC_IDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    core.inner.lock().unwrap().sync = Some(crate::sync_play::SyncSession {
+        id: session_id,
+        members: ids,
+        paused: false,
+        spread_ms: None,
+        status: "Loading…".into(),
+    });
+    core.emit_state();
+    tauri::async_runtime::spawn(crate::sync_play::run((*core).clone(), session_id));
+    Ok(())
+}
+
+/// Stop keeping devices in step (playback itself carries on).
+#[tauri::command]
+pub fn stop_sync(core: CoreState) {
+    info!("ui: stop sync");
+    core.inner.lock().unwrap().sync = None;
+    core.emit_state();
+}
+
 /// Play a video link (MP4, MKV, TS or an M3U8 live stream) straight from the internet.
 #[tauri::command]
 pub async fn play_url(core: CoreState<'_>, id: String, url: String) -> Result<(), String> {
