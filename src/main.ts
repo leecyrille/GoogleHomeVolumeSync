@@ -257,8 +257,8 @@ function sideDragging(): boolean {
 
 // ---------------- cast media (files / links) ----------------
 
-let castPanelOpen = false;
-let castTarget = "";
+let castMode: CastMode = "";
+const castPicked = new Set<string>();
 const CAST_VIDEO = ["mp4", "m4v", "webm", "mkv", "mov"];
 const CAST_AUDIO = ["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"];
 const CAST_PICTURES = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
@@ -296,74 +296,219 @@ async function chooseAndPlay(d: Device) {
   try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
 }
 
-/** Devices that can play files: any Google Cast device or group, and Roku TVs with the player set up. */
-function castTargets(): Device[] {
-  return state.devices.filter((d) => d.online && (d.backend === "cast" || (d.backend === "roku" && d.tv?.player_ready)));
+type CastMode = "" | "video" | "audio";
+
+/** A column of devices in the cast panel. */
+interface CastKind { key: string; title: string; match: (d: Device) => boolean; }
+
+/** Video and pictures need a screen; audio plays anywhere. Speaker groups only take audio. */
+function castKinds(mode: CastMode): CastKind[] {
+  const roku: CastKind = { key: "roku", title: "Roku TVs", match: (d) => d.backend === "roku" };
+  if (mode === "video") return [
+    roku,
+    { key: "gvideo", title: "Google TVs & displays", match: (d) => d.backend === "cast" && !d.is_cast_group && canShowPictures(d) },
+  ];
+  return [
+    roku,
+    { key: "google", title: "Google speakers & displays", match: (d) => d.backend === "cast" && !d.is_cast_group },
+    { key: "groups", title: "Speaker groups", match: (d) => d.backend === "cast" && d.is_cast_group },
+  ];
+}
+
+/** Why a device can't be picked right now, if it can't. */
+function castBlocked(d: Device): string {
+  if (d.backend === "roku" && !d.tv?.player_ready) return "Set up video playback on this TV's card first";
+  return "";
+}
+
+function castEligible(mode: CastMode): Device[] {
+  const kinds = castKinds(mode);
+  return state.devices.filter((d) => d.online && kinds.some((k) => k.match(d)));
+}
+
+function castPickedDevices(): Device[] {
+  return castEligible(castMode).filter((d) => castPicked.has(d.id) && !castBlocked(d));
+}
+
+const nameList = (ds: Device[]) => {
+  const n = ds.map((d) => displayName(d));
+  return n.length <= 1 ? n.join("") : `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
+};
+
+/** Devices in the selection that won't play in step with the rest, and what to drop to fix it. */
+function castConflicts(picked: Device[]): { lines: string[]; remove: string[] } {
+  const lines: string[] = [];
+  const remove = new Set<string>();
+  const groups = picked.filter((d) => d.is_cast_group);
+  // A speaker can only play one thing: picking it and a group it's in makes them fight.
+  for (const d of picked.filter((x) => !x.is_cast_group)) {
+    const g = groups.find((g) => g.members.includes(d.id));
+    if (g) { lines.push(`${displayName(d)} is already part of ${displayName(g)}.`); remove.add(d.id); }
+  }
+  const sorted = [...groups].sort((a, b) => b.members.length - a.members.length);
+  sorted.forEach((g, i) => {
+    const bigger = sorted.slice(0, i).find((o) => !remove.has(o.id) && g.members.some((m) => o.members.includes(m)));
+    if (bigger) { lines.push(`${displayName(g)} and ${displayName(bigger)} share speakers, and a speaker can only play one of them.`); remove.add(g.id); }
+  });
+  // Roku TVs can't join a Google group, so they're only kept roughly in step.
+  const left = picked.filter((d) => !remove.has(d.id));
+  const rokus = left.filter((d) => d.backend === "roku");
+  const googles = left.filter((d) => d.backend === "cast");
+  if (rokus.length && googles.length) {
+    const why = castMode === "video" ? "Roku TVs can't be linked with Google screens" : "Roku TVs can't join a Google speaker group";
+    lines.push(`${why}, so ${nameList(rokus)} won't stay exactly in sync with ${nameList(googles)}. The app keeps them close with short pauses, but you may hear an echo between them.`);
+    const drop = castMode === "video" && rokus.length > googles.length ? googles : rokus;
+    drop.forEach((d) => remove.add(d.id));
+  }
+  return { lines, remove: [...remove] };
 }
 
 function castPanel(): string {
-  const targets = castTargets();
-  if (!targets.some((d) => d.id === castTarget)) castTarget = targets[0]?.id ?? "";
-  const label = (d: Device) => `${displayName(d)}${d.is_cast_group ? " (group)" : d.backend === "roku" ? " (Roku)" : ""}`;
+  const kinds = castKinds(castMode);
+  const eligible = castEligible(castMode);
+  const picked = castPickedDevices();
+  const conflicts = castConflicts(picked);
+  const video = castMode === "video";
+  const column = (k: CastKind) => {
+    const ds = eligible.filter(k.match);
+    if (ds.length === 0) return "";
+    const pickable = ds.filter((d) => !castBlocked(d));
+    const allOn = pickable.length > 0 && pickable.every((d) => castPicked.has(d.id));
+    return `
+      <div class="cast-col">
+        <div class="cast-col-head"><span>${k.title}</span>${pickable.length > 1 ? `<button class="linkish" data-cast-all="${k.key}">${allOn ? "None" : "All"}</button>` : ""}</div>
+        ${ds.map((d) => {
+          const blocked = castBlocked(d);
+          return `<label class="chk ${blocked ? "blocked" : ""}" title="${esc(blocked)}"><input type="checkbox" data-cast-pick="${esc(d.id)}" ${castPicked.has(d.id) && !blocked ? "checked" : ""} ${blocked ? "disabled" : ""}> ${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}</label>`;
+        }).join("")}
+      </div>`;
+  };
+  const tipSpeakers = !video && picked.length > 1 && picked.every((d) => d.backend === "cast" && !d.is_cast_group);
+  const summary = picked.length === 0 ? "Pick where to play"
+    : picked.length === 1 ? `Plays on ${esc(displayName(picked[0]))}`
+    : `Plays in sync on ${picked.length} devices`;
   return `
     <div class="cast-panel">
-      <label>Play on
-        <select id="cast-target">${targets.map((d) => `<option value="${esc(d.id)}" ${d.id === castTarget ? "selected" : ""}>${esc(label(d))}</option>`).join("")}</select>
-      </label>
-      <button class="btn primary" id="cast-files" ${targets.length ? "" : "disabled"} title="${esc(capabilityNote(targets.find((d) => d.id === castTarget)))}">Play Audio, Video or Image</button>
-      <button class="btn" id="cast-link" ${targets.length ? "" : "disabled"}>Play a link…</button>
-      ${syncSection(targets)}
-      <div class="hint">Videos, music and pictures play on TVs, Nest Hubs and Chromecasts. Speakers and speaker groups play music and the sound of videos. Several files play in order, a same-named .srt or .vtt next to a video becomes subtitles, and several pictures become a slideshow (8 seconds each). Files are shared only with the device you pick, for 12 hours.</div>
+      <div class="cast-panel-title">${video ? "Play video or pictures" : "Play audio"}</div>
+      <div class="cast-cols">${kinds.map(column).join("") || `<div class="hint">No devices that can play ${video ? "video" : "audio"} are online.</div>`}</div>
+      ${conflicts.lines.length ? `
+        <div class="cast-warn">
+          <b>⚠ Some of these won't play in sync</b>
+          <ul>${conflicts.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+          <div class="cast-warn-actions">
+            <button class="btn mini" id="cast-drop">Remove ${esc(nameList(state.devices.filter((d) => conflicts.remove.includes(d.id))))}</button>
+            <span class="hint-inline">or play anyway on all of them.</span>
+          </div>
+        </div>` : ""}
+      ${tipSpeakers ? `<div class="hint">Tip: a speaker group made in the Google Home app plays in perfect sync. Separate speakers are kept in step by this app.</div>` : ""}
+      <div class="cast-actions">
+        <button class="btn primary" id="cast-files" ${picked.length ? "" : "disabled"}>${video ? "▶ Choose video or pictures…" : "▶ Choose music…"}</button>
+        <button class="btn" id="cast-link" ${picked.length ? "" : "disabled"}>🔗 Play a link…</button>
+        <span class="cast-summary">${summary}</span>
+      </div>
+      <div class="hint">${video
+        ? "One video plays in sync across several screens: pausing, resuming or skipping on any one moves the rest. Several pictures become a slideshow (8 seconds each), and a same-named .srt or .vtt next to a video becomes subtitles."
+        : "One song or recording plays in sync across several devices. On a single device, several files play in order."}
+        Files are shared only with the devices you pick, for 12 hours.</div>
     </div>`;
 }
 
-/** What the device can't do, for the button tooltip. */
-function capabilityNote(d?: Device): string {
-  if (!d) return "";
-  return canShowPictures(d) ? "Audio, video or pictures from this PC" : "This device has no screen: audio, and the sound of videos";
+/** Ask what to do about devices that won't sync. Resolves "drop", "all" or null (cancel). */
+function askConflicts(c: { lines: string[]; remove: string[] }): Promise<"drop" | "all" | null> {
+  return new Promise((resolve) => {
+    const dropNames = nameList(state.devices.filter((d) => c.remove.includes(d.id)));
+    const wrap = document.createElement("div");
+    wrap.className = "dialog-back";
+    wrap.innerHTML = `
+      <div class="dialog" role="dialog" aria-modal="true">
+        <h3>These won't play exactly in sync</h3>
+        <ul>${c.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+        <div class="dialog-actions">
+          <button class="btn primary" data-r="drop">Remove ${esc(dropNames)}</button>
+          <button class="btn" data-r="all">Play on all of them</button>
+          <button class="btn" data-r="">Cancel</button>
+        </div>
+      </div>`;
+    const done = (r: "drop" | "all" | null) => { wrap.remove(); resolve(r); };
+    wrap.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-r]");
+      if (b) done((b.dataset.r || null) as "drop" | "all" | null);
+      else if (e.target === wrap) done(null);
+    });
+    document.body.appendChild(wrap);
+    wrap.querySelector<HTMLButtonElement>("[data-r=drop]")?.focus();
+  });
 }
 
-const syncPicked = new Set<string>();
+/** Extensions every picked device can play, for the file picker. */
+function commonKinds(ds: Device[]): [string[], string[], string[]] {
+  const both = (a: string[], b: string[]) => a.filter((x) => b.includes(x));
+  return ds.map(playableKinds).reduce((acc, k) => [both(acc[0], k[0]), both(acc[1], k[1]), both(acc[2], k[2])]);
+}
 
-/** Pick several devices and one file; they play in step. */
-function syncSection(targets: Device[]): string {
-  if (targets.length < 2) return "";
-  return `
-      <div class="sync-box">
-        <div class="sync-title">Play in sync on several devices</div>
-        <div class="member-list">
-          ${targets.map((d) => `<label class="chk"><input type="checkbox" data-sync-pick="${esc(d.id)}" ${syncPicked.has(d.id) ? "checked" : ""}> ${esc(displayName(d))}</label>`).join("")}
-        </div>
-        <button class="btn" id="sync-play" ${syncPicked.size >= 2 ? "" : "disabled"}>Play Audio or Video in sync</button>
-        <span class="hint-inline">Pausing, resuming or skipping on any one of them moves the rest, and small drifts are evened out.</span>
-      </div>`;
+async function castPlay(link: boolean) {
+  let picked = castPickedDevices();
+  if (picked.length === 0) return;
+  const c = castConflicts(picked);
+  if (picked.length > 1 && c.lines.length) {
+    const r = await askConflicts(c);
+    if (!r) return;
+    if (r === "drop") {
+      c.remove.forEach((id) => castPicked.delete(id));
+      picked = picked.filter((d) => !c.remove.includes(d.id));
+      render();
+    }
+  }
+  const ids = picked.map((d) => d.id);
+  const each = (cmd: string, args: (id: string) => Record<string, unknown>) =>
+    Promise.all(ids.map((id) => invoke(cmd, args(id)))).catch((e) => alert(String(e)));
+
+  if (link) {
+    const url = prompt(castMode === "video" ? "Video link (MP4, MKV, WebM or an M3U8 live stream):" : "Music or radio link (MP3, AAC or an M3U8 stream):");
+    if (url) await each("play_url", (id) => ({ id, url }));
+    return;
+  }
+  const [video, audio, pictures] = commonKinds(picked);
+  const single = picked.length === 1;
+  if (castMode === "audio") {
+    const chosen = await open({ multiple: single, filters: [{ name: "Music", extensions: audio }] });
+    const paths = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
+    if (paths.length === 0) return;
+    if (single) return void each("play_files", (id) => ({ id, paths }));
+    try { await invoke("play_synced", { ids, path: paths[0] }); } catch (e) { alert(String(e)); }
+    return;
+  }
+  const chosen = await open({ multiple: true, filters: [
+    { name: "Videos and pictures", extensions: [...video, ...pictures] },
+    { name: "Videos", extensions: video },
+    ...(pictures.length ? [{ name: "Pictures", extensions: pictures }] : []),
+  ] });
+  const paths = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
+  if (paths.length === 0) return;
+  const isPicture = (p: string) => pictures.includes(p.split(".").pop()!.toLowerCase());
+  if (single || paths.every(isPicture)) return void each("play_files", (id) => ({ id, paths }));
+  if (paths.length > 1) { alert("To play on several screens in sync, choose one video. (Several pictures together make a slideshow.)"); return; }
+  try { await invoke("play_synced", { ids, path: paths[0] }); } catch (e) { alert(String(e)); }
 }
 
 function wireCastPanel() {
-  document.querySelectorAll<HTMLInputElement>("[data-sync-pick]").forEach((cb) => cb.addEventListener("change", () => {
-    if (cb.checked) syncPicked.add(cb.dataset.syncPick!); else syncPicked.delete(cb.dataset.syncPick!);
-    const btn = document.getElementById("sync-play") as HTMLButtonElement | null;
-    if (btn) btn.disabled = syncPicked.size < 2;
+  document.querySelectorAll<HTMLInputElement>("[data-cast-pick]").forEach((cb) => cb.addEventListener("change", () => {
+    if (cb.checked) castPicked.add(cb.dataset.castPick!); else castPicked.delete(cb.dataset.castPick!);
+    render();
   }));
-  document.getElementById("sync-play")?.addEventListener("click", async () => {
-    const ids = [...syncPicked].filter((id) => state.devices.some((d) => d.id === id && d.online));
-    if (ids.length < 2) return;
-    const picked = await open({ multiple: false, filters: [{ name: "Audio or video", extensions: [...CAST_VIDEO, ...CAST_AUDIO] }] });
-    if (typeof picked !== "string") return;
-    try { await invoke("play_synced", { ids, path: picked }); } catch (e) { alert(String(e)); }
+  document.querySelectorAll<HTMLElement>("[data-cast-all]").forEach((b) => b.addEventListener("click", () => {
+    const kind = castKinds(castMode).find((k) => k.key === b.dataset.castAll)!;
+    const ds = castEligible(castMode).filter((d) => kind.match(d) && !castBlocked(d));
+    const allOn = ds.every((d) => castPicked.has(d.id));
+    ds.forEach((d) => allOn ? castPicked.delete(d.id) : castPicked.add(d.id));
+    render();
+  }));
+  document.getElementById("cast-drop")?.addEventListener("click", () => {
+    castConflicts(castPickedDevices()).remove.forEach((id) => castPicked.delete(id));
+    render();
   });
-  const sel = document.getElementById("cast-target") as HTMLSelectElement | null;
-  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); render(); });
-  document.getElementById("cast-files")?.addEventListener("click", () => {
-    const d = state.devices.find((x) => x.id === castTarget);
-    if (d) chooseAndPlay(d);
-  });
-  document.getElementById("cast-link")?.addEventListener("click", async () => {
-    if (!castTarget) return;
-    const url = prompt("Video or music link (MP4, MP3, MKV, WebM or an M3U8 live stream):");
-    if (!url) return;
-    try { await invoke("play_url", { id: castTarget, url }); } catch (e) { alert(String(e)); }
-  });
+  document.getElementById("cast-files")?.addEventListener("click", () => castPlay(false));
+  document.getElementById("cast-link")?.addEventListener("click", () => castPlay(true));
 }
 
 // ---------------- devices view ----------------
@@ -375,9 +520,11 @@ function renderDevices() {
     <div class="toolbar">
       <button class="btn" id="scan-roku">Scan for Roku TVs</button>
       <button class="btn" id="add-manual">Add device by IP…</button>
-      <button class="btn primary" id="cast-media">▶ Cast media…</button>
+      <span class="toolbar-gap"></span>
+      <button class="btn ${castMode === "video" ? "primary" : ""}" data-cast-mode="video" title="Play a video or pictures from this PC on one or more screens">🎬 Play Video or Pictures</button>
+      <button class="btn ${castMode === "audio" ? "primary" : ""}" data-cast-mode="audio" title="Play music from this PC on one or more speakers or TVs">🎵 Play Audio</button>
     </div>
-    ${castPanelOpen ? castPanel() : ""}
+    ${castMode ? castPanel() : ""}
     ${section("Roku TVs", state.devices.filter((d) => d.backend === "roku"), stale)}
     ${section("Other Devices", state.devices.filter((d) => !["cast", "roku"].includes(d.backend)), stale)}
     ${section("Google Devices", state.devices.filter((d) => !d.is_cast_group && d.backend === "cast"), stale)}
@@ -394,7 +541,14 @@ function renderDevices() {
     setTimeout(() => { btn.disabled = false; btn.textContent = "Scan for Roku TVs"; }, 2500);
   });
   document.getElementById("add-manual")!.addEventListener("click", showAddManual);
-  document.getElementById("cast-media")!.addEventListener("click", () => { castPanelOpen = !castPanelOpen; render(); });
+  document.querySelectorAll<HTMLElement>("[data-cast-mode]").forEach((b) => b.addEventListener("click", () => {
+    const mode = b.dataset.castMode as CastMode;
+    castMode = castMode === mode ? "" : mode;
+    // Keep only the picks that still make sense (no speakers for video).
+    const ok = new Set(castEligible(castMode).map((d) => d.id));
+    [...castPicked].forEach((id) => { if (!ok.has(id)) castPicked.delete(id); });
+    render();
+  }));
   wireCastPanel();
 
   for (const d of state.devices) wireDeviceCard(d);
@@ -477,24 +631,24 @@ const VIDEO_EXTS = ["mp4", "m4v", "mov", "mkv", "ts", "webm"];
 const setupOpen = new Set<string>();
 const setupMsg = new Map<string, string>();
 
-/** Play buttons, or the one-time setup for the player channel. */
-function playRow(d: Device): string {
+/** Play buttons (or the setup button) for a Roku TV. */
+function playButtons(d: Device): string {
   const tv = d.tv!;
   if (d.backend !== "roku" || tv.power == null) return "";
   if (tv.player_ready) {
     return `
-    <div class="tv-play">
       <button class="btn" data-act="play-files" title="Videos, music or pictures from this PC. Several play in order (pictures as a slideshow); a same-named .srt or .vtt comes along as subtitles.">▶ Play Audio, Video or Image</button>
-      <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>
-    </div>`;
+      <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>`;
   }
-  const open = setupOpen.has(d.id);
+  return `<button class="btn" data-act="setup-toggle" title="Play files from this PC on this TV. One-time setup.">${setupOpen.has(d.id) ? "Hide setup" : "Set up video playback"}</button>`;
+}
+
+/** One-time setup steps for the player channel. */
+function setupPanel(d: Device): string {
+  const tv = d.tv!;
+  if (d.backend !== "roku" || tv.player_ready || !setupOpen.has(d.id)) return "";
   const msg = setupMsg.get(d.id);
   return `
-    <div class="tv-play">
-      <button class="btn" data-act="setup-toggle">${open ? "Hide setup" : "Set up video playback"}</button>
-      ${open ? "" : `<span class="hint-inline">Play files from this PC on this TV. One-time setup.</span>`}
-    </div>${open ? `
     <div class="setup">
       <p>Roku doesn't let apps send videos to the TV anymore, so Volume Sync installs its own small player channel. That needs the TV's developer mode, which you switch on once:</p>
       <ol>
@@ -506,7 +660,7 @@ function playRow(d: Device): string {
       </ol>
       ${msg ? `<div class="setup-msg">${esc(msg)}</div>` : ""}
       <p class="hint">Developer mode only lets the TV accept apps installed from your own network. Roku allows one such app at a time.</p>
-    </div>` : ""}`;
+    </div>`;
 }
 
 function progressRow(d: Device): string {
@@ -522,7 +676,51 @@ function progressRow(d: Device): string {
     </div>`;
 }
 
-/** Screen, input picker and remote for TVs that report them (Roku). */
+/** Icons for the remote, drawn to match the Roku remote's keys. */
+const ICON: Record<string, string> = {
+  back: `<svg viewBox="0 0 24 24"><path d="M20 12H6.5M11.5 6.5 6 12l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  home: `<svg viewBox="0 0 24 24"><path d="M4.5 11 12 4.8l7.5 6.2V19.5h-5.2v-5h-4.6v5H4.5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>`,
+  up: `<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  down: `<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  left: `<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  right: `<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  replay: `<svg viewBox="0 0 24 24"><path d="M6.2 9.2A7 7 0 1 1 5 13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M4.5 4.8v4.9h4.9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  sleep: `<svg viewBox="0 0 24 24"><path d="M18.5 14.8A7.5 7.5 0 0 1 9.2 5.5a7.5 7.5 0 1 0 9.3 9.3z" fill="currentColor"/></svg>`,
+  options: `<svg viewBox="0 0 24 24"><path d="M12 4.5v15M5.5 8.2l13 7.6M18.5 8.2l-13 7.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`,
+  rew: `<svg viewBox="0 0 24 24"><path d="M11.5 6.5v11L4 12zM20 6.5v11L12.5 12z" fill="currentColor"/></svg>`,
+  ff: `<svg viewBox="0 0 24 24"><path d="M12.5 6.5v11L20 12zM4 6.5v11l7.5-5.5z" fill="currentColor"/></svg>`,
+  playpause: `<svg viewBox="0 0 30 24"><path d="M3 6.5v11l8.5-5.5z" fill="currentColor"/><rect x="15" y="6.5" width="3.4" height="11" rx="0.6" fill="currentColor"/><rect x="21" y="6.5" width="3.4" height="11" rx="0.6" fill="currentColor"/></svg>`,
+};
+
+/** A Roku remote laid out wide: Back / Home, the blue pad, replay / sleep / options, then transport. */
+function rokuRemote(): string {
+  const k = (key: string, icon: string, title: string, cls = "") =>
+    `<button class="rk ${cls}" data-key="${key}" title="${title}" aria-label="${title}">${ICON[icon]}</button>`;
+  return `
+    <div class="rremote" aria-label="Remote control">
+      <div class="rmid">
+      <div class="rcol">${k("Back", "back", "Back")}${k("Home", "home", "Home")}</div>
+      <div class="rpad">
+        <div class="rpad-v"></div><div class="rpad-h"></div>
+        <button class="rpad-btn up" data-key="Up" title="Up" aria-label="Up">${ICON.up}</button>
+        <button class="rpad-btn down" data-key="Down" title="Down" aria-label="Down">${ICON.down}</button>
+        <button class="rpad-btn left" data-key="Left" title="Left" aria-label="Left">${ICON.left}</button>
+        <button class="rpad-btn right" data-key="Right" title="Right" aria-label="Right">${ICON.right}</button>
+        <button class="rpad-ok" data-key="Select" title="OK">OK</button>
+      </div>
+      <div class="rcol">
+        ${k("InstantReplay", "replay", "Instant replay")}
+        <button class="rk" disabled title="Sleep timer: Roku only allows setting this from the remote itself">${ICON.sleep}</button>
+        ${k("Info", "options", "Options (✱)")}
+      </div>
+      </div>
+      <div class="rrow transport">
+        ${k("Rev", "rew", "Rewind")}${k("Play", "playpause", "Play / Pause", "wide")}${k("Fwd", "ff", "Fast forward")}
+      </div>
+    </div>`;
+}
+
+/** Screen status, inputs, playback and (for Roku) a remote, beside each other. */
 function tvRow(d: Device): string {
   const tv = d.tv;
   if (!tv) return "";
@@ -535,38 +733,42 @@ function tvRow(d: Device): string {
           ? `<optgroup label="Inputs">${optionList("input")}</optgroup><optgroup label="Apps">${optionList("app")}</optgroup>`
           : optionList("input")}
       </select>`;
-  const showing = tv.power === false ? `<span class="tv-now off">Screen off</span>` : tv.showing ? `
-      <span class="tv-now" title="Now showing">
-        ${tv.showing_icon ? `<img src="${esc(tv.showing_icon)}" alt="">` : ""}
-        <span><b>${esc(tv.showing)}</b>${tv.showing_detail ? `<i>${esc(tv.showing_detail)}</i>` : ""}</span>
-      </span>` : "";
-  return `
-    <div class="tv-row">
-      ${tv.has_power ? `
+  // "Playing"/"Paused" already shows in the activity label; keep details like the Live TV channel.
+  const detail = tv.showing_detail && !["Playing", "Paused"].includes(tv.showing_detail) ? tv.showing_detail : "";
+  const off = tv.power === false;
+  const title = off ? "Screen off" : tv.showing ?? (tv.power == null ? displayName(d) : "—");
+  const activity = tv.power !== false && tv.activity && ACTIVITY[tv.activity]
+    ? `<span class="tv-act ${ACTIVITY[tv.activity][1]}" title="${ACTIVITY[tv.activity][2]}">${ACTIVITY[tv.activity][0]}</span>` : "";
+  const power = tv.has_power ? `
       <div class="pwr" title="${tv.power == null ? "This device doesn't report whether it's on" : ""}">
         <button class="${tv.power === true ? "on" : ""}" data-power="on">⏻ On</button><button class="${tv.power === false ? "off" : ""}" data-power="off">Off</button>
-      </div>` : ""}
-      ${showing}
-      ${tv.power !== false && tv.activity && ACTIVITY[tv.activity] ? `<span class="tv-act ${ACTIVITY[tv.activity][1]}" title="${ACTIVITY[tv.activity][2]}">${ACTIVITY[tv.activity][0]}</span>` : ""}
-      ${tv.headphones ? `<span class="tv-badge" title="Headphones are connected (private listening), so the TV speakers are silent">🎧 Private listening</span>` : ""}
-      <span class="grow"></span>
-      ${inputs}
-      ${d.backend === "roku" && !tv.exact_volume ? `<button class="btn" data-act="recal" title="This TV doesn't report its volume, so the app estimates it. Recalibrate re-zeros that estimate on the next change.">Recalibrate volume</button>` : ""}
-    </div>${tv.restricted ? `
-    <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
-      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${progressRow(d)}${playRow(d)}${d.backend !== "roku" ? "" : `
-    <div class="remote">
-      <div class="dpad">
-        <span></span><button class="btn" data-key="Up" title="Up">▲</button><span></span>
-        <button class="btn" data-key="Left" title="Left">◀</button><button class="btn ok" data-key="Select">OK</button><button class="btn" data-key="Right" title="Right">▶</button>
-        <span></span><button class="btn" data-key="Down" title="Down">▼</button><span></span>
+      </div>` : "";
+  const recal = d.backend === "roku" && !tv.exact_volume
+    ? `<button class="btn" data-act="recal" title="This TV doesn't report its volume, so the app estimates it. Recalibrate re-zeros that estimate on the next change.">Recalibrate volume</button>` : "";
+  const actions = `${inputs}${playButtons(d)}${recal}`;
+  const isRoku = d.backend === "roku";
+  return `
+    <div class="tv-area ${isRoku ? "" : "noremote"}">
+      <div class="tv-main">
+        <div class="tv-head">
+          <div class="tv-icon ${off ? "off" : ""}">${!off && tv.showing_icon ? `<img src="${esc(tv.showing_icon)}" alt="">` : `<span>${off ? "⏻" : "▭"}</span>`}</div>
+          <div class="tv-info">
+            <div class="tv-label">${off ? "" : "Now showing"}</div>
+            <div class="tv-title">${esc(title)}</div>
+            ${detail ? `<div class="tv-sub">${esc(detail)}</div>` : ""}
+            <div class="tv-badges">${activity}${tv.headphones ? `<span class="tv-badge" title="Headphones are connected (private listening), so the TV speakers are silent">🎧 Private listening</span>` : ""}</div>
+          </div>
+          ${power}
+        </div>
+        ${actions.trim() ? `<div class="tv-line">${actions}</div>` : ""}
+        ${progressRow(d)}
+        ${tv.restricted ? `
+        <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
+          <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}
+        ${setupPanel(d)}
       </div>
-      <div class="rkeys">
-        <div><button class="btn" data-key="Back">Back</button><button class="btn" data-key="Home">Home</button><button class="btn" data-key="Info" title="Options">✱</button></div>
-        <div><button class="btn" data-key="Rev" title="Rewind">⏪</button><button class="btn" data-key="Play" title="Play/Pause">⏯</button><button class="btn" data-key="Fwd" title="Fast forward">⏩</button></div>
-        <div><button class="btn" data-key="InstantReplay" title="Instant replay">↺ Replay</button><button class="btn" data-key="ChannelUp" title="Channel up">CH ▲</button><button class="btn" data-key="ChannelDown" title="Channel down">CH ▼</button></div>
-      </div>
-    </div>`}`;
+      ${isRoku ? rokuRemote() : ""}
+    </div>`;
 }
 
 function wireDeviceCard(d: Device) {
@@ -578,7 +780,7 @@ function wireDeviceCard(d: Device) {
     b.addEventListener("click", () => invoke("set_power", { id: d.id, on: b.dataset.power === "on" })));
   const inputSel = q('[data-act="input"]') as HTMLSelectElement | null;
   inputSel?.addEventListener("change", () => { invoke("set_input", { id: d.id, input: inputSel.value }); inputSel.blur(); });
-  card.querySelectorAll<HTMLImageElement>(".tv-now img").forEach((img) => img.addEventListener("error", () => img.remove()));
+  card.querySelectorAll<HTMLImageElement>(".tv-icon img").forEach((img) => img.addEventListener("error", () => img.remove()));
   q('[data-act="setup-toggle"]')?.addEventListener("click", () => {
     if (setupOpen.has(d.id)) setupOpen.delete(d.id); else setupOpen.add(d.id);
     render();

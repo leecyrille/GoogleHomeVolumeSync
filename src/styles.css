@@ -221,16 +221,8 @@ input[type="range"].vert {
 .side-note { font-size: 10.5px; color: var(--text-dim); margin-top: 8px; line-height: 1.35; font-style: italic; }
 
 /* ---- TV controls (Roku) ---- */
-.tv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; padding-left: 19px; }
-.tv-warn { margin: 8px 0 2px 19px; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: #f0d58a; background: #2e2610; border: 1px solid #6b5518; border-radius: 7px; }
+.tv-warn { margin: 0; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: #f0d58a; background: #2e2610; border: 1px solid #6b5518; border-radius: 7px; }
 .tv-warn b { color: #ffe7a3; font-weight: 600; }
-.remote { display: flex; gap: 18px; align-items: center; margin: 10px 0 4px 19px; }
-.dpad { display: grid; grid-template-columns: repeat(3, 40px); grid-auto-rows: 34px; gap: 4px; }
-.dpad .btn { padding: 0; font-size: 13px; }
-.dpad .ok { font-weight: 600; border-color: var(--accent); color: var(--accent); }
-.rkeys { display: flex; flex-direction: column; gap: 6px; }
-.rkeys div { display: flex; gap: 6px; }
-.rkeys .btn { min-width: 58px; }
 
 /* ---- schedule time picker ---- */
 .tpick { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 3px 4px 3px 6px; }
@@ -248,7 +240,6 @@ input[type="range"].vert {
 button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 500; }
 .member-kind .member-list { margin-top: 8px; }
 
-.tv-row select { padding: 5px 8px; }
 .tv-now { display: inline-flex; align-items: center; gap: 8px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px 3px 3px; min-width: 0; }
 .tv-now.off { padding: 5px 10px; color: var(--text-dim); font-size: 12.5px; }
 .tv-now img { height: 26px; width: auto; max-width: 46px; border-radius: 4px; object-fit: contain; background: #000; }
@@ -272,16 +263,15 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .tv-act.unknown { color: #aebfd0; background: #1b2533; }
 
 /* ---- Roku playback progress ---- */
-.tv-prog { display: flex; align-items: center; gap: 10px; margin: 8px 0 0 19px; max-width: 760px; }
+.tv-prog { display: flex; align-items: center; gap: 10px; max-width: 760px; }
 .tv-prog .t { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; min-width: 44px; }
 .tv-prog .t:last-child { text-align: right; color: var(--text-dim); }
 .tv-prog input[type="range"] { flex: 1; }
 .tv-prog .live { font-size: 12px; font-weight: 600; color: #ff6b6b; }
 
 /* ---- Roku video playback ---- */
-.tv-play { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 19px; }
 .hint-inline { font-size: 12px; color: var(--text-dim); }
-.setup { margin: 8px 0 4px 19px; padding: 10px 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; line-height: 1.5; max-width: 760px; }
+.setup { margin: 0; padding: 10px 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; line-height: 1.5; max-width: 760px; }
 .setup ol { margin: 8px 0 8px 18px; display: grid; gap: 8px; }
 .setup b { color: var(--text); }
 .setup-pw { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: middle; }
@@ -289,9 +279,28 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .setup-msg { margin: 6px 0; padding: 6px 10px; border-radius: 6px; background: #1b2533; color: var(--text); }
 
 /* ---- cast media panel / sidebar progress ---- */
-.cast-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -4px 0 14px; padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
-.cast-panel label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); }
-.cast-panel .hint { flex-basis: 100%; margin-top: 0; }
+.cast-panel { display: flex; flex-direction: column; gap: 12px; margin: -4px 0 16px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
+.cast-panel .hint { margin-top: 0; }
+.cast-panel-title { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .7px; }
+.cast-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 18px; }
+.cast-col { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.cast-col-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; font-weight: 600; margin-bottom: 2px; }
+.cast-col .chk.blocked { opacity: .5; cursor: not-allowed; }
+.cast-col .chk i { font-size: 11px; color: var(--text-dim); }
+.linkish { background: none; border: none; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
+.linkish:hover { text-decoration: underline; }
+.cast-warn { padding: 10px 12px; border-radius: 8px; background: #3a2d12; border: 1px solid #7a5a1c; color: #f2dfb4; font-size: 12.5px; }
+.cast-warn b { color: #ffcf6e; }
+.cast-warn ul { margin: 6px 0 8px 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cast-warn-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cast-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cast-summary { font-size: 12.5px; color: var(--text-dim); }
+.toolbar-gap { flex: 1; }
+.dialog-back { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 16px; }
+.dialog { max-width: 520px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+.dialog h3 { margin: 0 0 8px; font-size: 16px; }
+.dialog ul { margin: 0 0 16px 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+.dialog-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .side-prog { margin-top: 6px; }
 .side-prog input[type="range"] { width: 100%; height: 4px; }
 .side-times { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; margin-top: 2px; }
@@ -303,3 +312,75 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .side-sync { background: #13301f; border: 1px solid #2a6b45; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-size: 12px; }
 .side-sync b { color: var(--ok); }
 .side-sync .btn.mini { margin-top: 6px; }
+
+/* ---- TV area: controls left, remote right ---- */
+.tv-area {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: start;
+  margin: 12px 0 4px 19px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.tv-area.noremote { grid-template-columns: minmax(0, 1fr); }
+.tv-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tv-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tv-line select { padding: 6px 9px; min-width: 150px; }
+
+/* ---- Roku-style remote ---- */
+.rremote {
+  padding: 14px 16px 16px; border-radius: 34px;
+  background: #141416; border: 1px solid #26262a;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  box-shadow: 0 10px 24px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.rrow { display: flex; justify-content: center; gap: 10px; width: 100%; }
+.rmid { display: flex; align-items: center; gap: 12px; }
+.rcol { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.rcol .rk { width: 40px; min-width: 0; padding: 0; border-radius: 12px; }
+.rk {
+  display: grid; place-items: center; height: 32px; min-width: 42px; padding: 0 10px;
+  background: #2b2b2f; color: #e9e9ec; border: none; border-radius: 12px; cursor: pointer;
+  box-shadow: 0 2px 0 #0a0a0b, inset 0 1px 0 rgba(255,255,255,.08);
+  transition: background .12s, transform .06s;
+}
+.rk svg { width: 18px; height: 18px; display: block; }
+.rk:hover { background: #36363b; }
+.rk:active { transform: translateY(1px); box-shadow: 0 1px 0 #0a0a0b; }
+.rk:disabled { opacity: .35; cursor: not-allowed; }
+.rrow.transport .rk { width: 40px; min-width: 0; padding: 0; height: 36px; }
+.rrow.transport .rk.wide { width: 58px; }
+.rrow.transport .rk.wide svg { width: 26px; }
+
+.rpad { position: relative; width: 128px; height: 128px; }
+.rpad-v, .rpad-h { position: absolute; background: #1d74d8; border-radius: 16px; }
+.rpad-v { left: 40px; top: 0; width: 48px; height: 128px; }
+.rpad-h { left: 0; top: 40px; width: 128px; height: 48px; }
+.rpad-btn {
+  position: absolute; display: grid; place-items: center; background: transparent; border: none;
+  color: #fff; cursor: pointer; border-radius: 12px;
+}
+.rpad-btn svg { width: 20px; height: 20px; }
+.rpad-btn:hover { background: rgba(255,255,255,.12); }
+.rpad-btn:active { background: rgba(0,0,0,.18); }
+.rpad-btn.up { left: 40px; top: 0; width: 48px; height: 38px; }
+.rpad-btn.down { left: 40px; bottom: 0; width: 48px; height: 38px; }
+.rpad-btn.left { left: 0; top: 40px; width: 38px; height: 48px; }
+.rpad-btn.right { right: 0; top: 40px; width: 38px; height: 48px; }
+.rpad-ok {
+  position: absolute; left: 37px; top: 37px; width: 54px; height: 54px; border-radius: 50%;
+  background: #1861b8; color: #fff; border: 2px solid #155299; font-weight: 800; font-size: 17px;
+  letter-spacing: .5px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+}
+.rpad-ok:hover { background: #1c6cc9; }
+.rpad-ok:active { transform: translateY(1px); }
+
+/* ---- TV "now showing" header ---- */
+.tv-head { display: flex; align-items: center; gap: 14px; }
+.tv-icon { width: 88px; height: 66px; flex: none; border-radius: 10px; background: #0b0e13; border: 1px solid var(--border); display: grid; place-items: center; overflow: hidden; }
+.tv-icon img { width: 100%; height: 100%; object-fit: contain; }
+.tv-icon span { font-size: 24px; color: var(--text-dim); }
+.tv-icon.off span { color: #6b3b3b; }
+.tv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tv-label { font-size: 10.5px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--text-dim); min-height: 13px; }
+.tv-title { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-sub { font-size: 12.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px; }
+.tv-badges:empty { display: none; }
+.tv-head .pwr { align-self: flex-start; }
