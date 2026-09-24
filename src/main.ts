@@ -72,7 +72,11 @@ interface ScheduleTarget { target_id: string; is_group: boolean; volume_pct: num
 interface Sched { id: string; enabled: boolean; days: boolean[]; time: string; targets: ScheduleTarget[]; }
 interface Settings { start_with_windows: boolean; auto_update: boolean; }
 interface SyncView { members: string[]; paused: boolean; spread_ms?: number | null; status: string; }
-interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; }
+interface CalendarView {
+  saver?: string | null; rendering: boolean; updated?: number | null; error?: string | null;
+  showing: string[]; screensaver_tvs: string[]; outdated: string[];
+}
+interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; }
 
 let state: Snapshot = { devices: [], groups: [], schedules: [], settings: { start_with_windows: false, auto_update: false } };
 let view = "devices";
@@ -296,7 +300,7 @@ async function chooseAndPlay(d: Device) {
   try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
 }
 
-type CastMode = "" | "video" | "audio";
+type CastMode = "" | "video" | "audio" | "calendar";
 
 /** A column of devices in the cast panel. */
 interface CastKind { key: string; title: string; match: (d: Device) => boolean; }
@@ -364,6 +368,7 @@ function castConflicts(picked: Device[]): { lines: string[]; remove: string[] } 
 }
 
 function castPanel(): string {
+  if (castMode === "calendar") return calendarPanel();
   const kinds = castKinds(castMode);
   const eligible = castEligible(castMode);
   const picked = castPickedDevices();
@@ -491,7 +496,87 @@ async function castPlay(link: boolean) {
   try { await invoke("play_synced", { ids, path: paths[0] }); } catch (e) { alert(String(e)); }
 }
 
+// ---------------- calendar on TVs ----------------
+
+const CALENDAR_SITE = "https://calendarsaver.com/";
+const calBusy = new Set<string>();
+
+/** Screens that can show the calendar picture. */
+function calendarScreens(): Device[] {
+  return state.devices.filter((d) => d.online && (d.backend === "roku" || (d.backend === "cast" && !d.is_cast_group && canShowPictures(d))));
+}
+
+function calendarPanel(): string {
+  const cal: CalendarView = state.calendar ?? { rendering: false, showing: [], screensaver_tvs: [], outdated: [] };
+  const screens = calendarScreens();
+  const fileName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+  const when = cal.updated ? new Date(cal.updated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  const source = cal.saver
+    ? `<div class="cal-source">Drawn on this PC by <b title="${esc(cal.saver)}">${esc(fileName(cal.saver))}</b>
+         <button class="linkish" id="cal-locate">Change…</button>
+         ${cal.updated ? `<span class="cal-dot">·</span> latest picture ${esc(when)} <button class="linkish" id="cal-preview">Preview</button>` : ""}</div>`
+    : `<div class="cast-warn"><b>Couldn't find the PactoTech Calendar Saver on this PC.</b>
+         <div class="cast-warn-actions" style="margin-top:6px">
+           <button class="btn mini" id="cal-locate">Locate it…</button>
+           <button class="btn mini" id="cal-get">Get it</button>
+           <span class="hint-inline">The free calendar screensaver this shows on your TVs.</span>
+         </div></div>`;
+  const row = (d: Device) => {
+    const showing = cal.showing.includes(d.id);
+    const blocked = castBlocked(d);
+    const busy = calBusy.has(d.id);
+    const saver = d.backend === "roku" ? `
+        <label class="chk" title="Keep the calendar on this TV as its Roku screensaver">
+          <input type="checkbox" data-cal-ss="${esc(d.id)}" ${cal.screensaver_tvs.includes(d.id) ? "checked" : ""} ${blocked || busy ? "disabled" : ""}> Screensaver</label>
+        ${cal.outdated.includes(d.id) ? `<button class="btn mini" data-cal-update="${esc(d.id)}" title="This PC's network address changed since the TV saved it">Update TV</button>` : ""}` : "";
+    return `
+      <div class="cal-row">
+        <span class="cal-name">${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}</span>
+        ${showing ? `<span class="cal-on">● Showing</span>` : ""}
+        <span class="cal-acts">
+          ${saver}
+          ${showing
+            ? `<button class="btn mini" data-cal-stop="${esc(d.id)}" ${busy ? "disabled" : ""}>Stop</button>`
+            : `<button class="btn mini primary" data-cal-show="${esc(d.id)}" ${blocked || busy ? "disabled" : ""} title="${esc(blocked)}">${busy ? "Starting…" : "Show"}</button>`}
+        </span>
+      </div>`;
+  };
+  const column = (title: string, ds: Device[]) => ds.length === 0 ? "" : `
+      <div class="cast-col"><div class="cast-col-head"><span>${title}</span></div>${ds.map(row).join("")}</div>`;
+  const rokus = screens.filter((d) => d.backend === "roku");
+  const googles = screens.filter((d) => d.backend === "cast");
+  return `
+    <div class="cast-panel">
+      <div class="cast-panel-title">Calendar on TV</div>
+      ${source}
+      ${cal.error && cal.saver ? `<div class="cast-warn">⚠ ${esc(cal.error)}${cal.error.includes("Update it") ? ` <button class="btn mini" id="cal-get">Get the latest</button>` : ""}</div>` : ""}
+      <div class="cast-cols">${column("Roku TVs", rokus)}${column("Google TVs & displays", googles)}
+        ${screens.length === 0 ? `<div class="hint">No TVs or Google screens are online.</div>` : ""}</div>
+      <div class="hint">Your calendar is redrawn on this PC every minute and sent to the TV as a picture, so this PC needs to be on. For a Roku screensaver, tick <b>Screensaver</b>, then on the TV choose <b>Settings › Theme › Screensaver › Calendar (Volume Sync)</b>.</div>
+    </div>`;
+}
+
+function wireCalendarPanel() {
+  const run = async (id: string, cmd: string, args: Record<string, unknown>) => {
+    calBusy.add(id); render();
+    try { await invoke(cmd, args); } catch (e) { alert(String(e)); }
+    finally { calBusy.delete(id); render(); }
+  };
+  document.querySelectorAll<HTMLElement>("[data-cal-show]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calShow!, "calendar_show", { ids: [b.dataset.calShow] })));
+  document.querySelectorAll<HTMLElement>("[data-cal-stop]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calStop!, "calendar_stop", { ids: [b.dataset.calStop] })));
+  document.querySelectorAll<HTMLInputElement>("[data-cal-ss]").forEach((cb) => cb.addEventListener("change", () => run(cb.dataset.calSs!, "calendar_screensaver", { id: cb.dataset.calSs, on: cb.checked })));
+  document.querySelectorAll<HTMLElement>("[data-cal-update]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calUpdate!, "calendar_screensaver", { id: b.dataset.calUpdate, on: true })));
+  document.getElementById("cal-locate")?.addEventListener("click", async () => {
+    const picked = await open({ multiple: false, filters: [{ name: "Calendar Saver", extensions: ["scr", "exe"] }] });
+    if (typeof picked !== "string") return;
+    try { await invoke("calendar_set_saver", { path: picked }); } catch (e) { alert(String(e)); }
+  });
+  document.getElementById("cal-get")?.addEventListener("click", () => openUrl(CALENDAR_SITE));
+  document.getElementById("cal-preview")?.addEventListener("click", () => invoke("calendar_preview").catch((e) => alert(String(e))));
+}
+
 function wireCastPanel() {
+  if (castMode === "calendar") return wireCalendarPanel();
   document.querySelectorAll<HTMLInputElement>("[data-cast-pick]").forEach((cb) => cb.addEventListener("change", () => {
     if (cb.checked) castPicked.add(cb.dataset.castPick!); else castPicked.delete(cb.dataset.castPick!);
     render();
@@ -523,6 +608,7 @@ function renderDevices() {
       <span class="toolbar-gap"></span>
       <button class="btn ${castMode === "video" ? "primary" : ""}" data-cast-mode="video" title="Play a video or pictures from this PC on one or more screens">🎬 Play Video or Pictures</button>
       <button class="btn ${castMode === "audio" ? "primary" : ""}" data-cast-mode="audio" title="Play music from this PC on one or more speakers or TVs">🎵 Play Audio</button>
+      <button class="btn ${castMode === "calendar" ? "primary" : ""}" data-cast-mode="calendar" title="Show your PactoTech Calendar Saver on TVs, or use it as a Roku screensaver">📅 Calendar on TV</button>
     </div>
     ${castMode ? castPanel() : ""}
     ${section("Roku TVs", state.devices.filter((d) => d.backend === "roku"), stale)}
@@ -545,7 +631,7 @@ function renderDevices() {
     const mode = b.dataset.castMode as CastMode;
     castMode = castMode === mode ? "" : mode;
     // Keep only the picks that still make sense (no speakers for video).
-    const ok = new Set(castEligible(castMode).map((d) => d.id));
+    const ok = new Set(castMode === "calendar" ? [] : castEligible(castMode).map((d) => d.id));
     [...castPicked].forEach((id) => { if (!ok.has(id)) castPicked.delete(id); });
     render();
   }));

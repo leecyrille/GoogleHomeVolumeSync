@@ -8,6 +8,7 @@ sub init()
     m.slideIndex = 0
     m.audio = m.top.findNode("audio")
     m.nowPlaying = m.top.findNode("nowPlaying")
+    m.cal = m.top.findNode("cal")
     m.video.observeField("state", "onState")
     m.audio.observeField("state", "onAudioState")
     m.audio.observeField("contentIndex", "onAudioIndex")
@@ -20,6 +21,7 @@ sub playFrom(args as Object)
     if args = invalid or args.n = invalid then return
     count = Val(args.n)
     if count < 1 then return
+    hideCalendar()
     if args.f1 = "image" then
         stopAudio()
         showPictures(args, count)
@@ -184,14 +186,36 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     return true
 end function
 
+' The calendar picture from the PC, refreshed every minute.
+sub showCalendar(args as Object)
+    stopAudio()
+    stopPictures()
+    m.video.control = "stop"
+    m.video.visible = false
+    m.hint.visible = false
+    if args.every <> invalid then m.cal.every = Int(Val(args.every))
+    m.cal.visible = true
+    m.cal.url = args.cal
+    if args.save = "1" then m.cal.note = "Saved as a screensaver. To use it: Home, then Settings › Theme › Screensaver › Calendar (Volume Sync)."
+    m.top.setFocus(true)
+end sub
+
+sub hideCalendar()
+    m.cal.url = ""
+    m.cal.visible = false
+end sub
+
 sub onLaunch()
-    playFrom(m.top.launchArgs)
+    a = m.top.launchArgs
+    if a <> invalid and a.cal <> invalid then showCalendar(a) else playFrom(a)
 end sub
 
 sub onInput()
     a = m.top.inputArgs
     if a = invalid then return
-    if a.n <> invalid then
+    if a.cal <> invalid then
+        showCalendar(a)
+    else if a.n <> invalid then
         playFrom(a)
     else if a.seek <> invalid then
         if m.nowPlaying.visible then m.audio.seek = Val(a.seek) / 1000.0 else m.video.seek = Val(a.seek) / 1000.0

@@ -227,6 +227,15 @@ impl CastActor {
                 Some(tid) => send(wr, &self.id, tid, NS_MEDIA, &json!({"type":"GET_STATUS","requestId":next_req_id()})).await,
                 None => Ok(()),
             },
+            DeviceCmd::StopCasting => {
+                state.slideshow = None;
+                state.pending_cast = None;
+                match (state.media_transport_id.as_ref(), state.media_session_id) {
+                    (Some(tid), Some(msid)) => send(wr, &self.id, tid, NS_MEDIA,
+                        &json!({"type":"STOP","requestId":next_req_id(),"mediaSessionId":msid})).await,
+                    _ => Ok(()),
+                }
+            }
             DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Resync | DeviceCmd::Shutdown => Ok(()),
         }
     }

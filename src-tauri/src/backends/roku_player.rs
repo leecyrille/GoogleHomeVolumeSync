@@ -14,6 +14,9 @@ const MANIFEST: &str = include_str!("../../../roku-player/manifest");
 const MAIN_BRS: &str = include_str!("../../../roku-player/source/main.brs");
 const SCENE_XML: &str = include_str!("../../../roku-player/components/PlayerScene.xml");
 const SCENE_BRS: &str = include_str!("../../../roku-player/components/PlayerScene.brs");
+const CAL_XML: &str = include_str!("../../../roku-player/components/CalendarView.xml");
+const CAL_BRS: &str = include_str!("../../../roku-player/components/CalendarView.brs");
+const SAVER_XML: &str = include_str!("../../../roku-player/components/CalendarSaverScene.xml");
 const ICON: &[u8] = include_bytes!("../../../roku-player/images/icon.png");
 
 /// Home x3, Up x2, Right, Left, Right, Left, Right opens Roku's developer settings.
@@ -48,6 +51,9 @@ fn build_zip() -> Result<Vec<u8>, String> {
             ("source/main.brs", MAIN_BRS.as_bytes()),
             ("components/PlayerScene.xml", SCENE_XML.as_bytes()),
             ("components/PlayerScene.brs", SCENE_BRS.as_bytes()),
+            ("components/CalendarView.xml", CAL_XML.as_bytes()),
+            ("components/CalendarView.brs", CAL_BRS.as_bytes()),
+            ("components/CalendarSaverScene.xml", SAVER_XML.as_bytes()),
             ("images/icon.png", ICON),
         ] {
             zip.start_file(name, opts).map_err(|e| e.to_string())?;
@@ -220,6 +226,29 @@ pub async fn play(ip: &str, items: &[Item]) -> Result<(), String> {
         Err("The player channel isn't installed on this TV. Use Set up video playback first.".into())
     } else {
         Err(format!("The TV refused to start playback ({}).", r.status()))
+    }
+}
+
+/// Show a picture that refreshes every `every` seconds (the calendar). With `save`,
+/// the TV also keeps the address for its screensaver.
+pub async fn show_calendar(ip: &str, url: &str, every: u64, save: bool) -> Result<(), String> {
+    let c = client();
+    let active = c.get(format!("http://{ip}:8060/query/active-app")).send().await
+        .map_err(|e| e.to_string())?.text().await.unwrap_or_default();
+    let params = format!("cal={}&every={every}{}", q(url), if save { "&save=1" } else { "" });
+    let endpoint = if active.contains(r#"id="dev""#) {
+        format!("http://{ip}:8060/input?{params}")
+    } else {
+        format!("http://{ip}:8060/launch/dev?{params}")
+    };
+    let r = c.post(&endpoint).send().await.map_err(|e| e.to_string())?;
+    if r.status().is_success() {
+        info!(ip, save, "roku player: calendar");
+        Ok(())
+    } else if r.status() == reqwest::StatusCode::NOT_FOUND {
+        Err("The player channel isn't installed on this TV. Use Set up video playback first.".into())
+    } else {
+        Err(format!("The TV refused ({}).", r.status()))
     }
 }
 

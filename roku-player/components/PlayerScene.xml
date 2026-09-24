@@ -16,5 +16,6 @@
     <Video id="video" width="1920" height="1080" visible="false" />
     <Audio id="audio" />
     <Label id="nowPlaying" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true" visible="false" />
+    <CalendarView id="cal" visible="false" />
   </children>
 </component>

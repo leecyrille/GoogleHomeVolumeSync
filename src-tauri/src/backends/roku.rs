@@ -175,6 +175,12 @@ impl RokuActor {
                             self.poll_status(&client, &base, &mut online, &mut last).await;
                         }
                         DeviceCmd::Cast(_) => {}
+                        DeviceCmd::StopCasting => {
+                            let active = get_text(&client, &format!("{base}/query/active-app")).await.unwrap_or_default();
+                            if active.contains(r#"id="dev""#) {
+                                let _ = keypress(&client, &base, "Home").await;
+                            }
+                        }
                         DeviceCmd::PollMedia => {
                             if let Some(media) = read_media(&client, &base, &last.tv).await {
                                 last.media = Some(media.clone());

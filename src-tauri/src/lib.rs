@@ -4,6 +4,7 @@ mod commands;
 mod config;
 mod core;
 mod media_server;
+mod calendar;
 mod sync_play;
 mod tray;
 mod types;
@@ -74,6 +75,11 @@ pub fn run() {
             commands::get_log_tail,
             commands::open_log_folder,
             commands::open_notices,
+            commands::calendar_show,
+            commands::calendar_stop,
+            commands::calendar_screensaver,
+            commands::calendar_set_saver,
+            commands::calendar_preview,
         ])
         .setup(|app| {
             let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<types::CoreEvent>(256);
@@ -126,6 +132,9 @@ pub fn run() {
 
             // Persist Roku cached levels whenever a roku volume event lands:
             // handled via config save cadence above (levels live in actor + events).
+
+            // The calendar on TVs: renderer, picture link, Google screens.
+            tauri::async_runtime::spawn(calendar::run(core.clone()));
 
             // Reconnect actors for devices we knew about (cast devices before mdns finds them again).
             core.respawn_known_cast_devices();

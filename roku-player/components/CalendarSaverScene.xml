@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- The Roku screensaver: the calendar picture from the PC, full screen. -->
+<component name="CalendarSaverScene" extends="Scene">
+  <interface>
+    <field id="every" type="integer" onChange="onEvery" />
+    <field id="url" type="string" onChange="onUrl" />
+    <field id="message" type="string" onChange="onMessage" />
+  </interface>
+  <script type="text/brightscript">
+    <![CDATA[
+    sub init()
+        m.cal = m.top.findNode("cal")
+    end sub
+    sub onEvery()
+        m.cal.every = m.top.every
+    end sub
+    sub onUrl()
+        m.cal.url = m.top.url
+    end sub
+    sub onMessage()
+        m.cal.message = m.top.message
+    end sub
+    ]]>
+  </script>
+  <children>
+    <CalendarView id="cal" />
+  </children>
+</component>

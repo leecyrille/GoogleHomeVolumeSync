@@ -3,6 +3,10 @@
 //! Only files explicitly shared are served, each under a random token
 //! (`/v/<token>/<name>`), only to the device it was shared with, and only for
 //! SHARE_LIFETIME. Range requests are supported so the TV can seek.
+//!
+//! "Live" files (the calendar picture) get a lasting address instead
+//! (`/c/<token>/<name>`), are always read fresh, and are served to a list of TVs
+//! that the caller keeps up to date.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,6 +16,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, info, warn};
 
 const SHARE_LIFETIME: std::time::Duration = std::time::Duration::from_secs(12 * 60 * 60);
+/// Tried first so lasting addresses (a Roku screensaver's) survive restarts.
+const PREFERRED_PORT: u16 = 47826;
 
 struct Shared {
     path: PathBuf,
@@ -20,9 +26,15 @@ struct Shared {
     expires: std::time::Instant,
 }
 
+struct Live {
+    path: PathBuf,
+    allowed: Vec<std::net::IpAddr>,
+}
+
 struct Server {
     port: u16,
     files: Mutex<HashMap<String, Shared>>,
+    live: Mutex<HashMap<String, Live>>,
 }
 
 static SERVER: OnceLock<Server> = OnceLock::new();
@@ -36,9 +48,12 @@ async fn server() -> Result<&'static Server, String> {
     if let Some(s) = SERVER.get() {
         return Ok(s);
     }
-    let listener = TcpListener::bind(("0.0.0.0", 0)).await.map_err(|e| format!("couldn't start the file server: {e}"))?;
+    let listener = match TcpListener::bind(("0.0.0.0", PREFERRED_PORT)).await {
+        Ok(l) => l,
+        Err(_) => TcpListener::bind(("0.0.0.0", 0)).await.map_err(|e| format!("couldn't start the file server: {e}"))?,
+    };
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    let _ = SERVER.set(Server { port, files: Mutex::new(HashMap::new()) });
+    let _ = SERVER.set(Server { port, files: Mutex::new(HashMap::new()), live: Mutex::new(HashMap::new()) });
     info!(port, "media server: listening");
     tokio::spawn(async move {
         loop {
@@ -76,6 +91,25 @@ pub async fn share(path: &Path, device_ip: &str) -> Result<String, String> {
     let url = format!("http://{ip}:{}/v/{token}/{}", s.port, encode(name));
     info!(file=%path.display(), %url, "media server: shared");
     Ok(url)
+}
+
+/// Serve `path` at its lasting address to these TVs only. An empty list stops serving it.
+pub async fn set_live(token: &str, path: &Path, allowed: Vec<std::net::IpAddr>) {
+    if allowed.is_empty() {
+        if let Some(s) = SERVER.get() {
+            s.live.lock().unwrap().remove(token);
+        }
+        return;
+    }
+    let Ok(s) = server().await else { return };
+    s.live.lock().unwrap().insert(token.to_string(), Live { path: path.to_path_buf(), allowed });
+}
+
+/// The lasting address of a live file, as a TV at `device_ip` reaches it.
+pub async fn live_url(token: &str, name: &str, device_ip: &str) -> Result<String, String> {
+    let s = server().await?;
+    let ip = local_ip_towards(device_ip).await.ok_or("Couldn't work out this PC's network address.")?;
+    Ok(format!("http://{ip}:{}/c/{token}/{}", s.port, encode(name)))
 }
 
 /// The local address the OS would use to reach `ip` (the right interface on multi-NIC PCs).
@@ -139,11 +173,17 @@ async fn handle(mut sock: TcpStream, peer: std::net::IpAddr) -> std::io::Result<
     let range = lines
         .find_map(|l| l.split_once(':').filter(|(k, _)| k.trim().eq_ignore_ascii_case("range")).map(|(_, v)| v.trim().to_string()));
 
-    let token = target.strip_prefix("/v/").and_then(|r| r.split('/').next()).unwrap_or("");
+    let live = target.starts_with("/c/");
+    let token = target.strip_prefix("/v/").or_else(|| target.strip_prefix("/c/"))
+        .and_then(|r| r.split('/').next()).unwrap_or("");
     let path = SERVER.get().and_then(|s| {
-        s.files.lock().unwrap().get(token)
-            .filter(|f| f.allowed == peer && f.expires > std::time::Instant::now())
-            .map(|f| f.path.clone())
+        if live {
+            s.live.lock().unwrap().get(token).filter(|f| f.allowed.contains(&peer)).map(|f| f.path.clone())
+        } else {
+            s.files.lock().unwrap().get(token)
+                .filter(|f| f.allowed == peer && f.expires > std::time::Instant::now())
+                .map(|f| f.path.clone())
+        }
     });
     if path.is_none() {
         debug!(%peer, "media server: refused (unknown/expired link or wrong device)");
@@ -153,7 +193,14 @@ async fn handle(mut sock: TcpStream, peer: std::net::IpAddr) -> std::io::Result<
         return Ok(());
     };
 
-    let mut file = tokio::fs::File::open(&path).await?;
+    let mut file = match tokio::fs::File::open(&path).await {
+        Ok(f) => f,
+        Err(_) => {
+            // e.g. the calendar picture isn't made yet
+            sock.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await?;
+            return Ok(());
+        }
+    };
     let size = file.metadata().await?.len();
     // Only single ranges are needed by media players: bytes=start-[end]
     let (start, end, partial) = match range.as_deref().and_then(|r| r.strip_prefix("bytes=")).and_then(|r| r.split_once('-')) {
@@ -183,8 +230,9 @@ async fn handle(mut sock: TcpStream, peer: std::net::IpAddr) -> std::io::Result<
         "HTTP/1.1 200 OK\r\n".to_string()
     };
     header += &format!(
-        "Content-Type: {}\r\nContent-Length: {body_len}\r\nAccept-Ranges: bytes\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
-        content_type(&path)
+        "Content-Type: {}\r\nContent-Length: {body_len}\r\nAccept-Ranges: bytes\r\nAccess-Control-Allow-Origin: *\r\n{}Connection: close\r\n\r\n",
+        content_type(&path),
+        if live { "Cache-Control: no-store\r\n" } else { "" }
     );
     sock.write_all(header.as_bytes()).await?;
     if method == "HEAD" || body_len == 0 {

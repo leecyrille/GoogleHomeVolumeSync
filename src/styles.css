@@ -382,3 +382,14 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .tv-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px; }
 .tv-badges:empty { display: none; }
 .tv-head .pwr { align-self: flex-start; }
+
+/* ---- calendar on TV ---- */
+.cal-source { font-size: 12.5px; color: var(--text-dim); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.cal-source b { color: var(--text); font-weight: 600; }
+.cal-dot { opacity: .6; }
+.cal-row { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 13px; }
+.cal-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-name i { font-size: 11px; color: var(--text-dim); }
+.cal-on { font-size: 11.5px; color: var(--ok); white-space: nowrap; }
+.cal-acts { display: flex; align-items: center; gap: 10px; }
+.cal-acts .chk { font-size: 12px; color: var(--text-dim); }

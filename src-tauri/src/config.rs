@@ -54,6 +54,25 @@ pub struct AppConfig {
     /// LG webOS pairing keys: device id -> client-key.
     #[serde(default)]
     pub lg_keys: HashMap<String, String>,
+    /// Showing the PactoTech Calendar Saver on TVs.
+    #[serde(default)]
+    pub calendar: CalendarConfig,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct CalendarConfig {
+    /// The Calendar Saver file; found automatically when unset.
+    #[serde(default)]
+    pub saver_path: Option<String>,
+    /// Secret part of the picture's address, kept so screensavers keep working.
+    #[serde(default)]
+    pub token: String,
+    /// Roku TVs using the calendar as their screensaver.
+    #[serde(default)]
+    pub screensaver_tvs: Vec<String>,
+    /// The address each of those TVs saved: device id -> URL.
+    #[serde(default)]
+    pub pushed: HashMap<String, String>,
 }
 
 pub fn config_dir() -> PathBuf {

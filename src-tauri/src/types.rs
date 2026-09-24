@@ -104,6 +104,8 @@ pub enum DeviceCmd {
     Cast(Vec<CastItem>),
     /// Report the current playback position now (used by synced playback).
     PollMedia,
+    /// End what this app put on screen (Cast: stop the media; Roku: leave the player channel).
+    StopCasting,
     Shutdown,
 }
 

@@ -1,7 +1,8 @@
 title=Volume Sync Player
+screensaver_title=Calendar (Volume Sync)
 major_version=1
 minor_version=0
-build_version=3
+build_version=5
 ui_resolutions=fhd
 mm_icon_focus_hd=pkg:/images/icon.png
 mm_icon_focus_sd=pkg:/images/icon.png

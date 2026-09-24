@@ -100,6 +100,158 @@ pub async fn roku_install_player(core: CoreState<'_>, id: String, password: Stri
     Ok(())
 }
 
+/// Make sure a Roku has our player channel, and the newest one.
+async fn ensure_player(core: &Core, id: &str, ip: &str) -> Result<(), String> {
+    use crate::backends::roku_player as rp;
+    if rp::installed_version(ip).await.is_none() {
+        return Err("Set up video playback on this TV first (on its card).".into());
+    }
+    if rp::needs_upgrade(ip).await {
+        let pw = core.inner.lock().unwrap().cfg.roku_dev_passwords.get(id).cloned()
+            .ok_or("This needs a newer player on the TV. Run Set up video playback on its card again.")?;
+        info!(id=%id, "roku player: upgrading channel");
+        rp::install(ip, &pw).await?;
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    Ok(())
+}
+
+fn display_name(core: &Core, id: &str) -> String {
+    let inner = core.inner.lock().unwrap();
+    inner.devices.get(id).map(|e| e.info.custom_name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| e.info.friendly_name.clone()))
+        .unwrap_or_else(|| id.to_string())
+}
+
+/// Show the calendar on these TVs and screens now.
+#[tauri::command]
+pub async fn calendar_show(core: CoreState<'_>, ids: Vec<String>) -> Result<(), String> {
+    info!(?ids, "ui: show calendar");
+    let core_arc: Arc<Core> = (*core).clone();
+    let token = crate::calendar::ensure_token(&core);
+    let chosen = core.inner.lock().unwrap().cfg.calendar.saver_path.clone();
+    crate::calendar::reset();
+    if crate::calendar::saver(chosen, true).is_none() {
+        return Err(crate::calendar::NO_SAVER.into());
+    }
+    let mut errors = Vec::new();
+    for id in ids {
+        let (backend, _) = device_backend(&core, &id)?;
+        let result: Result<(), String> = match backend {
+            Backend::Cast => {
+                crate::calendar::start_showing(&id);
+                Ok(())
+            }
+            Backend::Roku => async {
+                let ip = tv_ready(&core, &id).await?;
+                ensure_player(&core, &id, &ip).await?;
+                crate::calendar::start_showing(&id);
+                crate::calendar::step(&core_arc).await; // let this TV fetch the picture
+                let url = crate::calendar::picture_url(&token, &ip).await?;
+                crate::backends::roku_player::show_calendar(&ip, &url, crate::calendar::EVERY_SECS, false).await
+                    .inspect_err(|_| { crate::calendar::stop_showing(&id); })
+            }.await,
+            _ => Err("This device can't show pictures.".into()),
+        };
+        if let Err(e) = result {
+            errors.push(format!("{}: {e}", display_name(&core, &id)));
+        }
+    }
+    crate::calendar::step(&core_arc).await;
+    core.emit_state();
+    if errors.is_empty() { Ok(()) } else { Err(errors.join("\n")) }
+}
+
+/// Stop showing the calendar on these screens.
+#[tauri::command]
+pub async fn calendar_stop(core: CoreState<'_>, ids: Vec<String>) -> Result<(), String> {
+    info!(?ids, "ui: stop calendar");
+    for id in &ids {
+        if crate::calendar::stop_showing(id) {
+            core.send_cmd(id, DeviceCmd::StopCasting);
+        }
+    }
+    crate::calendar::step(&(*core).clone()).await;
+    core.emit_state();
+    Ok(())
+}
+
+/// Use the calendar as a Roku TV's screensaver (or stop).
+#[tauri::command]
+pub async fn calendar_screensaver(core: CoreState<'_>, id: String, on: bool) -> Result<(), String> {
+    info!(id=%id, on, "ui: calendar screensaver");
+    let core_arc: Arc<Core> = (*core).clone();
+    if !on {
+        {
+            let mut inner = core.inner.lock().unwrap();
+            inner.cfg.calendar.screensaver_tvs.retain(|t| t != &id);
+            inner.cfg.calendar.pushed.remove(&id);
+        }
+        core.save_config();
+        crate::calendar::step(&core_arc).await;
+        core.emit_state();
+        return Ok(());
+    }
+    let token = crate::calendar::ensure_token(&core);
+    let chosen = core.inner.lock().unwrap().cfg.calendar.saver_path.clone();
+    crate::calendar::reset();
+    if crate::calendar::saver(chosen, true).is_none() {
+        return Err(crate::calendar::NO_SAVER.into());
+    }
+    let ip = tv_ready(&core, &id).await?;
+    ensure_player(&core, &id, &ip).await?;
+    {
+        let mut inner = core.inner.lock().unwrap();
+        if !inner.cfg.calendar.screensaver_tvs.contains(&id) {
+            inner.cfg.calendar.screensaver_tvs.push(id.clone());
+        }
+    }
+    crate::calendar::start_showing(&id);
+    crate::calendar::step(&core_arc).await;
+    let url = crate::calendar::picture_url(&token, &ip).await?;
+    let shown = crate::backends::roku_player::show_calendar(&ip, &url, crate::calendar::EVERY_SECS, true).await;
+    {
+        let mut inner = core.inner.lock().unwrap();
+        match &shown {
+            Ok(()) => { inner.cfg.calendar.pushed.insert(id.clone(), url); }
+            Err(_) => inner.cfg.calendar.screensaver_tvs.retain(|t| t != &id),
+        }
+    }
+    if shown.is_err() {
+        crate::calendar::stop_showing(&id);
+    }
+    core.save_config();
+    crate::calendar::step(&core_arc).await;
+    core.emit_state();
+    shown
+}
+
+/// Use this Calendar Saver file (None = find it automatically).
+#[tauri::command]
+pub async fn calendar_set_saver(core: CoreState<'_>, path: Option<String>) -> Result<(), String> {
+    info!(?path, "ui: calendar saver file");
+    core.inner.lock().unwrap().cfg.calendar.saver_path = path.clone();
+    core.save_config();
+    crate::calendar::reset();
+    if crate::calendar::saver(path, true).is_none() {
+        core.emit_state();
+        return Err(crate::calendar::NO_SAVER.into());
+    }
+    crate::calendar::step(&(*core).clone()).await;
+    core.emit_state();
+    Ok(())
+}
+
+/// Open the latest calendar picture.
+#[tauri::command]
+pub fn calendar_preview(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = crate::calendar::image_path();
+    if !path.is_file() {
+        return Err("There's no picture yet. Show the calendar on a TV first.".into());
+    }
+    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
 /// The TV's address, turning it on first if it's off.
 async fn tv_ready(core: &Core, id: &str) -> Result<String, String> {
     let (ip, off) = {

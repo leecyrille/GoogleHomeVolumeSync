@@ -57,6 +57,7 @@ pub struct Snapshot {
     pub schedules: Vec<ScheduleEvent>,
     pub settings: crate::config::Settings,
     pub sync: Option<SyncView>,
+    pub calendar: crate::calendar::CalendarView,
 }
 
 #[derive(Serialize, Clone)]
@@ -129,6 +130,7 @@ impl Core {
             groups: inner.cfg.groups.clone(),
             schedules: inner.cfg.schedules.clone(),
             settings: inner.cfg.settings.clone(),
+            calendar: crate::calendar::view(&inner.cfg.calendar),
             sync: inner.sync.as_ref().map(|s| SyncView {
                 members: s.members.clone(),
                 paused: s.paused,

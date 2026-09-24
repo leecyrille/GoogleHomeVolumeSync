@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Full-screen picture from the PC, re-fetched every few seconds; a new one only
+     replaces the old once it has loaded, so the screen never goes blank. -->
+<component name="CalendarView" extends="Group">
+  <interface>
+    <field id="url" type="string" onChange="onUrl" />
+    <field id="every" type="integer" value="60" />
+    <field id="note" type="string" onChange="onNote" />
+    <field id="message" type="string" onChange="onMessage" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/CalendarView.brs" />
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x0D1117FF" />
+    <Label id="waiting" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true"
+      color="0x9AA4B2FF" text="Waiting for the calendar from your PC…" />
+    <Poster id="a" width="1920" height="1080" loadWidth="1920" loadHeight="1080" loadDisplayMode="scaleToFit" opacity="0" />
+    <Poster id="b" width="1920" height="1080" loadWidth="1920" loadHeight="1080" loadDisplayMode="scaleToFit" opacity="0" />
+    <Rectangle id="staleBg" translation="[0,1030]" width="1920" height="50" color="0x000000B0" visible="false" />
+    <Label id="stale" translation="[40,1030]" width="1840" height="50" vertAlign="center" color="0xE0AF68FF" visible="false" />
+    <Rectangle id="noteBg" translation="[0,930]" width="1920" height="150" color="0x000000D8" visible="false" />
+    <Label id="noteText" translation="[80,930]" width="1760" height="150" horizAlign="center" vertAlign="center" wrap="true" visible="false" />
+    <Timer id="refresh" repeat="true" duration="5" />
+    <Timer id="noteTimer" repeat="false" duration="20" />
+  </children>
+</component>
