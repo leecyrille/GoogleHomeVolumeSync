@@ -59,7 +59,7 @@ pub struct AppConfig {
     pub calendar: CalendarConfig,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CalendarConfig {
     /// The Calendar Saver file; found automatically when unset.
     #[serde(default)]
@@ -73,6 +73,17 @@ pub struct CalendarConfig {
     /// The address each of those TVs saved: device id -> URL.
     #[serde(default)]
     pub pushed: HashMap<String, String>,
+    /// "dark" or "light" on the TV.
+    #[serde(default = "default_dark")]
+    pub theme: String,
+}
+fn default_dark() -> String {
+    "dark".into()
+}
+impl Default for CalendarConfig {
+    fn default() -> Self {
+        CalendarConfig { saver_path: None, token: String::new(), screensaver_tvs: Vec::new(), pushed: HashMap::new(), theme: default_dark() }
+    }
 }
 
 pub fn config_dir() -> PathBuf {

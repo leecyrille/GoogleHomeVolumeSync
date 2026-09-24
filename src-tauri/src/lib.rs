@@ -80,6 +80,7 @@ pub fn run() {
             commands::calendar_screensaver,
             commands::calendar_set_saver,
             commands::calendar_preview,
+            commands::calendar_set_theme,
         ])
         .setup(|app| {
             let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<types::CoreEvent>(256);

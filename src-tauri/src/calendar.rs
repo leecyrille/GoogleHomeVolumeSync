@@ -65,6 +65,7 @@ pub struct CalendarView {
     pub screensaver_tvs: Vec<String>,
     /// Screensaver TVs holding an old address for the picture (this PC's address changed).
     pub outdated: Vec<String>,
+    pub theme: String,
 }
 
 pub fn image_path() -> PathBuf {
@@ -85,6 +86,7 @@ pub fn view(cfg: &crate::config::CalendarConfig) -> CalendarView {
         showing: r.showing.keys().cloned().collect(),
         screensaver_tvs: cfg.screensaver_tvs.clone(),
         outdated: r.outdated.clone(),
+        theme: cfg.theme.clone(),
     }
 }
 
@@ -173,6 +175,16 @@ pub fn reset() {
     r.error = None;
 }
 
+/// Redraw with new settings: stop the renderer and let the next pass start it again.
+pub fn restart() {
+    let mut r = rt();
+    if let Some(mut child) = r.child.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    r.retry_at = None;
+}
+
 /// The picture's address for a TV at `ip`.
 pub async fn picture_url(token: &str, ip: &str) -> Result<String, String> {
     crate::media_server::live_url(token, PICTURE_NAME, ip).await
@@ -187,14 +199,14 @@ struct Dev {
     tv_showing: Option<String>,
 }
 
-fn start_renderer(saver: &Path) -> Result<std::process::Child, String> {
+fn start_renderer(saver: &Path, theme: &str) -> Result<std::process::Child, String> {
     use std::os::windows::process::CommandExt;
     // "/p render" rather than a new switch: older savers quietly exit on /p
     // (the Windows preview flag) instead of opening their settings window.
     std::process::Command::new(saver)
         .args(["/p", "render"])
         .arg(image_path())
-        .args(["--size", SIZE, "--every", &EVERY_SECS.to_string(), "--parent", &std::process::id().to_string()])
+        .args(["--size", SIZE, "--every", &EVERY_SECS.to_string(), "--theme", theme, "--parent", &std::process::id().to_string()])
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("Couldn't start the Calendar Saver: {e}"))
@@ -269,7 +281,7 @@ pub async fn step(core: &Arc<Core>) {
         }
         if need && r.child.is_none() && r.retry_at.map(|t| Instant::now() >= t).unwrap_or(true) {
             match &saver_path {
-                Some(path) => match start_renderer(path) {
+                Some(path) => match start_renderer(path, &cfg.theme) {
                     Ok(child) => {
                         info!(saver=%path.display(), "calendar: drawing the calendar for TVs");
                         r.child = Some(child);

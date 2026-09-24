@@ -241,6 +241,21 @@ pub async fn calendar_set_saver(core: CoreState<'_>, path: Option<String>) -> Re
     Ok(())
 }
 
+/// Dark or light calendar on the TV.
+#[tauri::command]
+pub async fn calendar_set_theme(core: CoreState<'_>, theme: String) -> Result<(), String> {
+    info!(theme=%theme, "ui: calendar theme");
+    if theme != "dark" && theme != "light" {
+        return Err("Unknown theme.".into());
+    }
+    core.inner.lock().unwrap().cfg.calendar.theme = theme;
+    core.save_config();
+    crate::calendar::restart();
+    crate::calendar::step(&(*core).clone()).await;
+    core.emit_state();
+    Ok(())
+}
+
 /// Open the latest calendar picture.
 #[tauri::command]
 pub fn calendar_preview(app: tauri::AppHandle) -> Result<(), String> {

@@ -74,7 +74,7 @@ interface Settings { start_with_windows: boolean; auto_update: boolean; }
 interface SyncView { members: string[]; paused: boolean; spread_ms?: number | null; status: string; }
 interface CalendarView {
   saver?: string | null; rendering: boolean; updated?: number | null; error?: string | null;
-  showing: string[]; screensaver_tvs: string[]; outdated: string[];
+  showing: string[]; screensaver_tvs: string[]; outdated: string[]; theme?: string;
 }
 interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; }
 
@@ -508,6 +508,11 @@ function calendarScreens(): Device[] {
 
 function calendarPanel(): string {
   const cal: CalendarView = state.calendar ?? { rendering: false, showing: [], screensaver_tvs: [], outdated: [] };
+  const theme = cal.theme === "light" ? "light" : "dark";
+  const themePick = `
+      <div class="cal-theme" role="group" aria-label="Calendar theme">
+        <button class="${theme === "dark" ? "on" : ""}" data-cal-theme="dark">Dark</button><button class="${theme === "light" ? "on" : ""}" data-cal-theme="light">Light</button>
+      </div>`;
   const screens = calendarScreens();
   const fileName = (p: string) => p.split(/[\\/]/).pop() ?? p;
   const when = cal.updated ? new Date(cal.updated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
@@ -547,7 +552,7 @@ function calendarPanel(): string {
   const googles = screens.filter((d) => d.backend === "cast");
   return `
     <div class="cast-panel">
-      <div class="cast-panel-title">Calendar on TV</div>
+      <div class="cal-head"><div class="cast-panel-title">Calendar on TV</div>${themePick}</div>
       ${source}
       ${cal.error && cal.saver ? `<div class="cast-warn">⚠ ${esc(cal.error)}${cal.error.includes("Update it") ? ` <button class="btn mini" id="cal-get">Get the latest</button>` : ""}</div>` : ""}
       <div class="cast-cols">${column("Roku TVs", rokus)}${column("Google TVs & displays", googles)}
@@ -556,12 +561,24 @@ function calendarPanel(): string {
     </div>`;
 }
 
+/** Run a calendar command for one screen, showing it as busy meanwhile. */
+async function calRun(id: string, cmd: string, args: Record<string, unknown>) {
+  calBusy.add(id); render();
+  try { await invoke(cmd, args); } catch (e) { alert(String(e)); }
+  finally { calBusy.delete(id); render(); }
+}
+
+/** Show / stop the calendar from a TV's own card. */
+function calendarButton(d: Device, compact = false): string {
+  const on = !!state.calendar?.showing.includes(d.id);
+  const busy = calBusy.has(d.id);
+  const label = busy ? "Starting…" : on ? "📅 Stop calendar" : "📅 Show calendar";
+  return `<button class="btn ${compact ? "icon" : ""} ${on ? "cal-active" : ""}" data-act="calendar" ${busy ? "disabled" : ""}
+    title="${on ? "Stop showing the calendar on this screen" : "Show your calendar on this screen (updates every minute)"}">${compact ? "📅" : label}</button>`;
+}
+
 function wireCalendarPanel() {
-  const run = async (id: string, cmd: string, args: Record<string, unknown>) => {
-    calBusy.add(id); render();
-    try { await invoke(cmd, args); } catch (e) { alert(String(e)); }
-    finally { calBusy.delete(id); render(); }
-  };
+  const run = calRun;
   document.querySelectorAll<HTMLElement>("[data-cal-show]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calShow!, "calendar_show", { ids: [b.dataset.calShow] })));
   document.querySelectorAll<HTMLElement>("[data-cal-stop]").forEach((b) => b.addEventListener("click", () => run(b.dataset.calStop!, "calendar_stop", { ids: [b.dataset.calStop] })));
   document.querySelectorAll<HTMLInputElement>("[data-cal-ss]").forEach((cb) => cb.addEventListener("change", () => run(cb.dataset.calSs!, "calendar_screensaver", { id: cb.dataset.calSs, on: cb.checked })));
@@ -572,6 +589,10 @@ function wireCalendarPanel() {
     try { await invoke("calendar_set_saver", { path: picked }); } catch (e) { alert(String(e)); }
   });
   document.getElementById("cal-get")?.addEventListener("click", () => openUrl(CALENDAR_SITE));
+  document.querySelectorAll<HTMLElement>("[data-cal-theme]").forEach((b) => b.addEventListener("click", () => {
+    if (b.classList.contains("on")) return;
+    invoke("calendar_set_theme", { theme: b.dataset.calTheme }).catch((e) => alert(String(e)));
+  }));
   document.getElementById("cal-preview")?.addEventListener("click", () => invoke("calendar_preview").catch((e) => alert(String(e))));
 }
 
@@ -669,6 +690,7 @@ function deviceCard(d: Device, stale: boolean): string {
         <button class="btn icon" data-act="prev">⏮</button>
         <button class="btn icon" data-act="${d.media.state === "PLAYING" ? "pause" : "play"}">${d.media.state === "PLAYING" ? "⏸" : "▶"}</button>
         <button class="btn icon" data-act="next">⏭</button>` : ""}
+      ${d.online && d.backend === "cast" && !d.is_cast_group && canShowPictures(d) ? calendarButton(d, true) : ""}
       ${stale ? `<button class="btn danger icon" data-act="delete" title="Remove until seen again">✕</button>` : ""}
       <label class="gain-wrap" title="Sync Gain (0–200%, default 100%): balance this device inside sync groups. Its actual volume = group volume × gain; it reports volume ÷ gain back to the group. Example: at 50% gain, group volume 30% puts this device at 15%.">
         <span>Sync Gain</span>
@@ -728,7 +750,8 @@ function playButtons(d: Device): string {
   if (tv.player_ready) {
     return `
       <button class="btn" data-act="play-files" title="Videos, music or pictures from this PC. Several play in order (pictures as a slideshow); a same-named .srt or .vtt comes along as subtitles.">▶ Play Audio, Video or Image</button>
-      <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>`;
+      <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>
+      ${calendarButton(d)}`;
   }
   return `<button class="btn" data-act="setup-toggle" title="Play files from this PC on this TV. One-time setup.">${setupOpen.has(d.id) ? "Hide setup" : "Set up video playback"}</button>`;
 }
@@ -891,6 +914,9 @@ function wireDeviceCard(d: Device) {
     render();
   });
   q('[data-act="play-files"]')?.addEventListener("click", () => chooseAndPlay(d));
+  q('[data-act="calendar"]')?.addEventListener("click", () => state.calendar?.showing.includes(d.id)
+    ? calRun(d.id, "calendar_stop", { ids: [d.id] })
+    : calRun(d.id, "calendar_show", { ids: [d.id] }));
   q('[data-act="play-url"]')?.addEventListener("click", async () => {
     const url = prompt("Video link (MP4, MKV, TS or an M3U8 live stream):");
     if (!url) return;
