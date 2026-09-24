@@ -50,6 +50,8 @@ interface TvStatus {
   duration_ms?: number | null;
   position_at?: number | null;
   is_live?: boolean;
+  dev_mode?: boolean;
+  player_ready?: boolean;
   inputs: InputOption[];
   headphones: boolean;
   model?: string | null;
@@ -320,6 +322,42 @@ function livePosition(tv: TvStatus): number {
   return Math.min(tv.duration_ms ?? Infinity, base + (Date.now() - tv.position_at));
 }
 
+const VIDEO_EXTS = ["mp4", "m4v", "mov", "mkv", "ts", "webm"];
+const setupOpen = new Set<string>();
+const setupMsg = new Map<string, string>();
+
+/** Play buttons, or the one-time setup for the player channel. */
+function playRow(d: Device): string {
+  const tv = d.tv!;
+  if (d.backend !== "roku" || tv.power == null) return "";
+  if (tv.player_ready) {
+    return `
+    <div class="tv-play">
+      <button class="btn" data-act="play-files" title="Pick one or more video files on this PC; they play in order. Subtitles (.srt or .vtt with the same name) come along.">▶ Play videos…</button>
+      <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>
+    </div>`;
+  }
+  const open = setupOpen.has(d.id);
+  const msg = setupMsg.get(d.id);
+  return `
+    <div class="tv-play">
+      <button class="btn" data-act="setup-toggle">${open ? "Hide setup" : "Set up video playback"}</button>
+      ${open ? "" : `<span class="hint-inline">Play files from this PC on this TV. One-time setup.</span>`}
+    </div>${open ? `
+    <div class="setup">
+      <p>Roku doesn't let apps send videos to the TV anymore, so Volume Sync installs its own small player channel. That needs the TV's developer mode, which you switch on once:</p>
+      <ol>
+        <li><button class="btn mini" data-act="dev-settings">Open developer settings on the TV</button> (or press Home ×3, Up ×2, Right, Left, Right, Left, Right on the remote)</li>
+        <li>On the TV choose <b>Enable installer and restart</b>, accept the agreement, and pick a password.</li>
+        <li>After the TV restarts, enter that password here:
+          <span class="setup-pw"><input type="password" data-act="dev-pw" placeholder="Developer password" autocomplete="off"><button class="btn primary" data-act="install-player">Install player</button></span>
+        </li>
+      </ol>
+      ${msg ? `<div class="setup-msg">${esc(msg)}</div>` : ""}
+      <p class="hint">Developer mode only lets the TV accept apps installed from your own network. Roku allows one such app at a time.</p>
+    </div>` : ""}`;
+}
+
 function progressRow(d: Device): string {
   const tv = d.tv!;
   if (tv.position_ms == null || !(tv.activity === "playing" || tv.activity === "paused")) return "";
@@ -365,7 +403,7 @@ function tvRow(d: Device): string {
       ${d.backend === "roku" ? `<button class="btn" data-act="recal" title="Re-zero the volume calibration on the next volume change">Recalibrate volume</button>` : ""}
     </div>${tv.restricted ? `
     <div class="tv-warn">This TV only allows limited control from apps, so it blocks power and input changes. To fix it, on the TV go to
-      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${progressRow(d)}${d.backend !== "roku" ? "" : `
+      <b>Settings → System → Advanced system settings → Control by mobile apps → Network access</b> and choose <b>Default</b> (or <b>Permissive</b> if that still doesn't work).</div>` : ""}${progressRow(d)}${playRow(d)}${d.backend !== "roku" ? "" : `
     <div class="remote">
       <div class="dpad">
         <span></span><button class="btn" data-key="Up" title="Up">▲</button><span></span>
@@ -390,6 +428,40 @@ function wireDeviceCard(d: Device) {
   const inputSel = q('[data-act="input"]') as HTMLSelectElement | null;
   inputSel?.addEventListener("change", () => { invoke("set_input", { id: d.id, input: inputSel.value }); inputSel.blur(); });
   card.querySelectorAll<HTMLImageElement>(".tv-now img").forEach((img) => img.addEventListener("error", () => img.remove()));
+  q('[data-act="setup-toggle"]')?.addEventListener("click", () => {
+    if (setupOpen.has(d.id)) setupOpen.delete(d.id); else setupOpen.add(d.id);
+    render();
+  });
+  q('[data-act="dev-settings"]')?.addEventListener("click", async () => {
+    setupMsg.set(d.id, "Pressing the buttons on the TV… watch the screen.");
+    render();
+    try { await invoke("roku_dev_settings", { id: d.id }); setupMsg.set(d.id, "The developer settings screen should be open on the TV."); }
+    catch (e) { setupMsg.set(d.id, String(e)); }
+    render();
+  });
+  q('[data-act="install-player"]')?.addEventListener("click", async () => {
+    const pw = (card.querySelector('[data-act="dev-pw"]') as HTMLInputElement).value;
+    if (!pw) { setupMsg.set(d.id, "Enter the password you chose on the TV."); render(); return; }
+    setupMsg.set(d.id, "Installing the player on the TV…");
+    render();
+    try {
+      await invoke("roku_install_player", { id: d.id, password: pw });
+      setupMsg.delete(d.id);
+      setupOpen.delete(d.id);
+    } catch (e) { setupMsg.set(d.id, String(e)); }
+    render();
+  });
+  q('[data-act="play-files"]')?.addEventListener("click", async () => {
+    const picked = await open({ multiple: true, filters: [{ name: "Videos", extensions: VIDEO_EXTS }] });
+    const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
+    if (paths.length === 0) return;
+    try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
+  });
+  q('[data-act="play-url"]')?.addEventListener("click", async () => {
+    const url = prompt("Video link (MP4, MKV, TS or an M3U8 live stream):");
+    if (!url) return;
+    try { await invoke("play_url", { id: d.id, url }); } catch (e) { alert(String(e)); }
+  });
   const seekEl = card.querySelector<HTMLInputElement>("[data-seek]");
   if (seekEl) {
     const posEl = card.querySelector<HTMLElement>("[data-pos]")!;
@@ -783,7 +855,7 @@ listen<Snapshot>("state", (e) => {
   // Avoid clobbering UI while user drags a slider or edits text - but still
   // live-update the OTHER sliders so sync is visible during a drag.
   const active = document.activeElement;
-  const editing = (active instanceof HTMLInputElement && (active.type === "text" || active.type === "time" || active.type === "number"))
+  const editing = (active instanceof HTMLInputElement && (active.type === "text" || active.type === "password" || active.type === "time" || active.type === "number"))
     || active instanceof HTMLSelectElement;
   if (!sideDragging()) renderSide();
   if (dragging.size === 0 && !editing && view !== "log") {

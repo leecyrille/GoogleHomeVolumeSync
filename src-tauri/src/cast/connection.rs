@@ -179,7 +179,7 @@ impl CastActor {
                 };
                 send(wr, &self.id, tid, NS_MEDIA, &payload).await
             }
-            DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Shutdown => Ok(()),
+            DeviceCmd::Power(_) | DeviceCmd::Input(_) | DeviceCmd::Key(_) | DeviceCmd::Seek(_) | DeviceCmd::Resync | DeviceCmd::Shutdown => Ok(()),
         }
     }
 

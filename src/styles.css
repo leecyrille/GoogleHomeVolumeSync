@@ -277,3 +277,13 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .tv-prog .t:last-child { text-align: right; color: var(--text-dim); }
 .tv-prog input[type="range"] { flex: 1; }
 .tv-prog .live { font-size: 12px; font-weight: 600; color: #ff6b6b; }
+
+/* ---- Roku video playback ---- */
+.tv-play { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 19px; }
+.hint-inline { font-size: 12px; color: var(--text-dim); }
+.setup { margin: 8px 0 4px 19px; padding: 10px 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; line-height: 1.5; max-width: 760px; }
+.setup ol { margin: 8px 0 8px 18px; display: grid; gap: 8px; }
+.setup b { color: var(--text); }
+.setup-pw { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: middle; }
+.setup-pw input { width: 180px; }
+.setup-msg { margin: 6px 0; padding: 6px 10px; border-radius: 6px; background: #1b2533; color: var(--text); }

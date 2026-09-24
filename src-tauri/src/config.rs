@@ -48,6 +48,9 @@ pub struct AppConfig {
     /// Roku pseudo-absolute volume cache: device id -> last known level 0-100.
     #[serde(default)]
     pub roku_levels: HashMap<String, u8>,
+    /// Roku developer-installer passwords: device id -> password (local only).
+    #[serde(default)]
+    pub roku_dev_passwords: HashMap<String, String>,
     /// LG webOS pairing keys: device id -> client-key.
     #[serde(default)]
     pub lg_keys: HashMap<String, String>,

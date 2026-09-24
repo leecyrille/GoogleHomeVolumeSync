@@ -3,6 +3,7 @@ mod cast;
 mod commands;
 mod config;
 mod core;
+mod media_server;
 mod tray;
 mod types;
 
@@ -53,6 +54,10 @@ pub fn run() {
             commands::set_input,
             commands::device_key,
             commands::seek,
+            commands::roku_dev_settings,
+            commands::roku_install_player,
+            commands::play_files,
+            commands::play_url,
             commands::recalibrate_roku,
             commands::save_groups,
             commands::set_group_volume,

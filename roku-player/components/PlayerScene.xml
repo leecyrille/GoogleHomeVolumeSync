@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PlayerScene" extends="Scene">
+  <interface>
+    <field id="launchArgs" type="assocarray" onChange="onLaunch" />
+    <field id="inputArgs" type="assocarray" onChange="onInput" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/PlayerScene.brs" />
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x0F1419FF" />
+    <Label id="hint" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true"
+      text="Volume Sync Player&#10;Choose Play videos in the Volume Sync app on your PC." />
+    <Video id="video" width="1920" height="1080" visible="false" />
+  </children>
+</component>

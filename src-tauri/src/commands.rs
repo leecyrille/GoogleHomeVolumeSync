@@ -78,6 +78,89 @@ pub fn seek(core: CoreState, id: String, position_ms: u64) {
     core.send_cmd(&id, DeviceCmd::Seek(position_ms));
 }
 
+fn device_ip(core: &Core, id: &str) -> Result<String, String> {
+    core.inner.lock().unwrap().devices.get(id).map(|e| e.info.ip.clone()).ok_or_else(|| "Unknown device.".to_string())
+}
+
+#[tauri::command]
+pub async fn roku_dev_settings(core: CoreState<'_>, id: String) -> Result<(), String> {
+    info!(id=%id, "ui: open roku developer settings");
+    let ip = device_ip(&core, &id)?;
+    crate::backends::roku_player::open_dev_settings(&ip).await
+}
+
+#[tauri::command]
+pub async fn roku_install_player(core: CoreState<'_>, id: String, password: String) -> Result<(), String> {
+    info!(id=%id, "ui: install roku player channel");
+    let ip = device_ip(&core, &id)?;
+    crate::backends::roku_player::install(&ip, &password).await?;
+    core.inner.lock().unwrap().cfg.roku_dev_passwords.insert(id.clone(), password);
+    core.save_config();
+    core.send_cmd(&id, DeviceCmd::Resync);
+    Ok(())
+}
+
+/// The TV's address, turning it on first if it's off.
+async fn tv_ready(core: &Core, id: &str) -> Result<String, String> {
+    let (ip, off) = {
+        let inner = core.inner.lock().unwrap();
+        let e = inner.devices.get(id).ok_or("Unknown device.")?;
+        (e.info.ip.clone(), e.info.tv.as_ref().and_then(|t| t.power) == Some(false))
+    };
+    if off {
+        core.send_cmd(id, DeviceCmd::Power(true));
+        tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+    }
+    Ok(ip)
+}
+
+/// Play one or more files from this PC, in order, with subtitles found next to them.
+#[tauri::command]
+pub async fn play_files(core: CoreState<'_>, id: String, paths: Vec<String>) -> Result<(), String> {
+    use crate::backends::roku_player::{sidecar_subtitles, stream_format, Item};
+    info!(id=%id, count = paths.len(), "ui: play files on TV");
+    let paths: Vec<std::path::PathBuf> = paths.into_iter().map(std::path::PathBuf::from).collect();
+    let unsupported: Vec<String> = paths.iter().filter(|p| stream_format(p).is_none())
+        .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from)).collect();
+    if !unsupported.is_empty() {
+        return Err(format!("Roku TVs play MP4, MOV, MKV and TS video files. Not supported: {}", unsupported.join(", ")));
+    }
+    let ip = tv_ready(&core, &id).await?;
+    let mut items = Vec::new();
+    for p in &paths {
+        let subtitles = match sidecar_subtitles(p) {
+            Some(s) => Some(crate::media_server::share(&s, &ip).await?),
+            None => None,
+        };
+        items.push(Item {
+            url: crate::media_server::share(p, &ip).await?,
+            title: p.file_stem().and_then(|s| s.to_str()).unwrap_or("Video").to_string(),
+            fmt: stream_format(p).unwrap_or("mp4"),
+            subtitles,
+        });
+    }
+    crate::backends::roku_player::play(&ip, &items).await?;
+    core.send_cmd(&id, DeviceCmd::Resync);
+    Ok(())
+}
+
+/// Play a video link (MP4, MKV, TS or an M3U8 live stream) straight from the internet.
+#[tauri::command]
+pub async fn play_url(core: CoreState<'_>, id: String, url: String) -> Result<(), String> {
+    use crate::backends::roku_player::{stream_format_for_url, Item};
+    let url = url.trim().to_string();
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("That doesn't look like a web link (it should start with http:// or https://).".into());
+    }
+    info!(id=%id, %url, "ui: play link on TV");
+    let ip = tv_ready(&core, &id).await?;
+    let title = url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).filter(|t| !t.is_empty()).unwrap_or("Video").to_string();
+    let item = Item { fmt: stream_format_for_url(&url), url, title, subtitles: None };
+    crate::backends::roku_player::play(&ip, &[item]).await?;
+    core.send_cmd(&id, DeviceCmd::Resync);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn device_key(core: CoreState, id: String, key: String) {
     info!(id=%id, key=%key, "ui: remote key");

@@ -147,6 +147,10 @@ impl RokuActor {
                             tokio::time::sleep(Duration::from_millis(1500)).await;
                             self.poll_status(&client, &base, &mut online, &mut last).await;
                         }
+                        DeviceCmd::Resync => {
+                            last.inputs_at = None;
+                            self.poll_status(&client, &base, &mut online, &mut last).await;
+                        }
                         DeviceCmd::Seek(target) => {
                             self.seek(&client, &base, target).await;
                             self.poll_status(&client, &base, &mut online, &mut last).await;
@@ -275,6 +279,8 @@ impl RokuActor {
         let tv = TvStatus {
             restricted,
             has_power: is_tv,
+            dev_mode: xml_tag(&info, "developer-enabled").as_deref() == Some("true"),
+            player_ready: last.inputs.iter().any(|i| i.id == "app:dev") || active_id == "dev",
             position_ms,
             duration_ms,
             position_at: position_ms.map(|_| unix_ms()),
@@ -337,8 +343,13 @@ impl RokuActor {
         // TV inputs first, in the TV's order, then apps.
         let (tvin, apps): (Vec<_>, Vec<_>) = parsed.into_iter().partition(|(_, kind, _)| kind == "tvin");
         let icon = |id: &str| Some(format!("http://{}:8060/query/icon/{}", self.ip, id));
+        // Our own player channel ("dev") is kept with kind "player" so it can be
+        // detected, and hidden from the Switch to list in the UI.
         tvin.iter().map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name.clone(), kind: "input".into(), icon: icon(id) })
-            .chain(apps.iter().map(|(id, _, name)| InputOption { id: format!("app:{id}"), label: name.clone(), kind: "app".into(), icon: icon(id) }))
+            .chain(apps.iter().map(|(id, _, name)| InputOption {
+                id: format!("app:{id}"), label: name.clone(),
+                kind: if id == "dev" { "player".into() } else { "app".into() }, icon: icon(id),
+            }))
             .collect()
     }
 
@@ -350,6 +361,13 @@ impl RokuActor {
             let x = get_text(client, &format!("{base}/query/media-player")).await?;
             xml_tag(&x, "position").and_then(|v| parse_ms(&v))
         };
+        // Our own player channel takes an exact position.
+        let active = get_text(client, &format!("{base}/query/active-app")).await.unwrap_or_default();
+        if active.contains(r#"id="dev""#) {
+            let _ = client.post(format!("{base}/input?seek={target}")).send().await;
+            info!(id=%self.id, target, "roku: seek (player channel)");
+            return;
+        }
         let Some(start) = read().await else {
             warn!(id=%self.id, "roku: seek: app isn't reporting a position");
             return;

@@ -72,6 +72,8 @@ pub enum DeviceCmd {
     Key(String),
     /// Move playback to this position (milliseconds).
     Seek(u64),
+    /// Re-read everything now (e.g. right after installing the player channel).
+    Resync,
     Shutdown,
 }
 
@@ -114,6 +116,12 @@ pub struct TvStatus {
     pub position_at: Option<i64>,
     #[serde(default)]
     pub is_live: bool,
+    /// Roku developer mode is on (needed to install the video player channel).
+    #[serde(default)]
+    pub dev_mode: bool,
+    /// The Volume Sync Player channel is installed, so files can be played.
+    #[serde(default)]
+    pub player_ready: bool,
     pub inputs: Vec<InputOption>,
     /// Headphones plugged into the remote or app (private listening).
     pub headphones: bool,
