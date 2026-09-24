@@ -117,13 +117,13 @@ function applyVol(item: VolItem, level: number) {
   else invoke("set_volume", { id: item.id, level: v });
 }
 
-function sideSlider(key: string, label: string, level: number): string {
+function sideSlider(key: string, label: string, level: number, showLabel: boolean): string {
   const pct = Math.round(level * 100);
   return `
-    <div class="vcol" data-vkey="${esc(key)}">
-      <span class="vpct">${pct}%</span>
+    <div class="vcol" data-vkey="${esc(key)}" title="${esc(label)}">
+      <span class="vpct">${pct}<small>%</small></span>
       <input type="range" class="vert" min="0" max="100" value="${pct}" aria-label="${esc(label)} volume">
-      <span class="vlabel" title="${esc(label)}">${esc(label)}</span>
+      ${showLabel ? `<span class="vlabel">${esc(label)}</span>` : ""}
     </div>`;
 }
 
@@ -161,8 +161,10 @@ function renderSide() {
     }).join("")}
     ${sessions.length > shown.length ? `<div class="side-sub">+${sessions.length - shown.length} more playing</div>` : ""}
     ${items.length ? `
-      <div class="vstrip">
-        ${averaged ? sideSlider("avg", "Average", avg) : items.map((i) => sideSlider((i.kind === "group" ? "g:" : "d:") + i.id, i.label, i.level)).join("")}
+      <div class="vstrip n${averaged ? 1 : Math.min(items.length, MAX_SLIDERS)}">
+        ${averaged
+          ? sideSlider("avg", "Average", avg, false)
+          : items.map((i) => sideSlider((i.kind === "group" ? "g:" : "d:") + i.id, i.label, i.level, items.length > 1)).join("")}
       </div>
       ${averaged ? `<div class="side-note">Average of ${items.length} sync groups. Moving it scales them all up or down together.</div>` : ""}` : ""}`;
 
@@ -189,7 +191,7 @@ function renderSide() {
     input.addEventListener("pointerup", () => setTimeout(() => { dragging.delete(dragKey); renderSide(); renderIfPending(); }, 800));
     input.addEventListener("input", () => {
       const v = Number(input.value) / 100;
-      pctEl.textContent = `${input.value}%`;
+      pctEl.innerHTML = `${input.value}<small>%</small>`;
       debounce(dragKey, 180, () => {
         if (key === "avg") {
           for (const i of base) applyVol(i, baseAvg > 0.01 ? i.level * (v / baseAvg) : v);
@@ -561,13 +563,15 @@ function wireSchedCard(s: Sched) {
 
 async function renderLog() {
   content.innerHTML = `
-    <h2>Log</h2>
+    <h2>Log <span class="sub">discoveries, observed changes and sent commands</span></h2>
     <div class="toolbar">
+      <button class="btn" id="log-back">← Settings</button>
       <input type="text" id="log-filter" placeholder="Filter…" style="width:240px" />
       <button class="btn" id="open-logs">Open log folder</button>
     </div>
     <div class="log-box" id="log-box">Loading…</div>`;
   document.getElementById("open-logs")!.addEventListener("click", () => invoke("open_log_folder"));
+  document.getElementById("log-back")!.addEventListener("click", () => { view = "settings"; render(); });
   const filterEl = document.getElementById("log-filter") as HTMLInputElement;
   const refresh = async () => {
     const lines = await invoke<string[]>("get_log_tail", { lines: 500 });
@@ -611,12 +615,22 @@ function renderSettings() {
       <div class="hint">This app is free and open source. If it made your house sound better, a small tip keeps it that way. Links open in your browser.</div>
     </div>
     <div class="card">
+      <div class="credits-title">Troubleshooting</div>
+      <div class="support-row" style="margin-top:6px">
+        <button class="btn" id="view-log">View log</button>
+        <button class="btn" id="open-log-folder">Open log folder</button>
+      </div>
+      <div class="hint">Every discovery, observed volume change and sent command, with each device's Cast ID and address.</div>
+    </div>
+    <div class="card">
       <div class="credits-title">Open-source credits</div>
       <p class="credits">Built with <b>Tauri</b>, <b>Tokio</b>, <b>Serde</b>, <b>mdns-sd</b>, <b>prost</b>, <b>reqwest</b>, <b>rustls</b>, <b>native-tls</b>, <b>tungstenite</b>, <b>tracing</b> and <b>chrono</b>, plus about 350 other open-source packages. Thank you to everyone who maintains them.</p>
       <p class="credits">The Google Cast message format comes from Chromium's <i>cast_channel.proto</i> (BSD-3-Clause, The Chromium Authors). Roku control follows Roku's published External Control Protocol documentation.</p>
       <div class="support-row" style="margin-top:10px"><button class="btn" id="open-notices">View all licenses</button></div>
     </div>`;
   document.getElementById("open-notices")!.addEventListener("click", () => invoke("open_notices"));
+  document.getElementById("view-log")!.addEventListener("click", () => { view = "log"; render(); });
+  document.getElementById("open-log-folder")!.addEventListener("click", () => invoke("open_log_folder"));
   document.getElementById("support-donate")!.addEventListener("click", () => openUrl(DONATE_URL));
   document.getElementById("support-site")!.addEventListener("click", () => openUrl(SITE_URL));
   document.getElementById("support-repo")!.addEventListener("click", () => openUrl(REPO_URL));
@@ -639,6 +653,8 @@ function renderSettings() {
 // ---------------- shell ----------------
 
 function render() {
+  const navView = view === "log" ? "settings" : view;
+  document.querySelectorAll<HTMLElement>(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === navView));
   if (logTimer) { clearInterval(logTimer); logTimer = undefined; }
   switch (view) {
     case "devices": return renderDevices();

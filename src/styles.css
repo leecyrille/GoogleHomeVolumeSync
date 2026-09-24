@@ -101,7 +101,7 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
   background: var(--accent); border: 2px solid #0d3a52;
 }
-.vol-pct { width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.vol-pct { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); font-size: 16px; font-weight: 600; }
 
 button.btn {
   background: var(--bg-hover); color: var(--text); border: 1px solid var(--border);
@@ -185,6 +185,9 @@ button.btn.donate:hover { background: #4d3814; border-color: #ffc766; color: #ff
 #sidebar { width: 184px; overflow-y: auto; scrollbar-width: thin; }
 #np-side:empty { display: none; }
 #np-side { margin-top: 10px; padding: 10px 8px 2px; border-top: 1px solid var(--border); }
+/* When something is playing, the widget takes the sidebar's free height so the sliders can grow with the window. */
+#np-side:not(:empty) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#np-side:not(:empty) + .sidebar-spacer { flex: 0; }
 .side-head { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
 .side-np { margin-bottom: 10px; }
 .side-top { display: flex; gap: 8px; align-items: center; }
@@ -194,12 +197,21 @@ button.btn.donate:hover { background: #4d3814; border-color: #ffc766; color: #ff
 .side-sub { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .side-ctl { display: flex; gap: 4px; margin-top: 6px; }
 .side-ctl .btn.icon { flex: 1; padding: 5px 0; font-size: 13px; }
-.vstrip { display: flex; justify-content: center; gap: 2px; margin-top: 6px; }
-.vcol { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 26px; min-width: 0; }
-.vpct { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.vstrip { flex: 1; min-height: 150px; display: flex; justify-content: center; gap: 2px; margin: 6px 0 10px; }
+.vcol { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-width: 0; height: 100%; }
+.vpct { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; letter-spacing: -0.02em; }
+/* The fewer sliders, the more room each percentage gets. */
+.vstrip.n1 .vpct { font-size: 40px; }
+.vstrip.n2 .vpct { font-size: 26px; }
+.vstrip.n3 .vpct { font-size: 18px; }
+.vstrip.n4 .vpct { font-size: 14px; }
+.vstrip.n5 .vpct, .vstrip.n6 .vpct { font-size: 13px; }
+.vpct small { font-size: 0.55em; margin-left: 1px; font-weight: 600; color: var(--text-dim); }
+/* Columns get narrow with many sliders: show the number alone. */
+.vstrip.n5 .vpct small, .vstrip.n6 .vpct small { display: none; }
 input[type="range"].vert {
   writing-mode: vertical-lr; direction: rtl;
-  flex: none; width: 5px; height: 100px; padding: 0; margin: 0;
+  flex: 1 1 auto; width: 5px; height: auto; min-height: 90px; padding: 0; margin: 0;
 }
 .vlabel {
   writing-mode: vertical-rl; transform: rotate(180deg);
