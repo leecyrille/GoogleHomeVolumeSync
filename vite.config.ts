@@ -25,6 +25,9 @@ export default defineConfig(() => ({
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
+      // File-change events are unreliable on some Windows drives (edits went unseen), so poll.
+      usePolling: true,
+      interval: 300,
     },
   },
 }));

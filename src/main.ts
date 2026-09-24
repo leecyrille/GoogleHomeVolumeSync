@@ -373,6 +373,13 @@ function showAddManual() {
 
 // ---------------- groups view ----------------
 
+/** Device types in a sync group's member picker. Google cast groups are left out on purpose. */
+const MEMBER_KINDS: { key: string; title: string; match: (d: Device) => boolean }[] = [
+  { key: "cast", title: "Google speakers & displays", match: (d) => d.backend === "cast" },
+  { key: "roku", title: "Roku TVs", match: (d) => d.backend === "roku" },
+  { key: "other", title: "Other devices", match: (d) => d.backend !== "cast" && d.backend !== "roku" },
+];
+
 function renderGroups() {
   content.innerHTML = `
     <h2>Sync Groups <span class="sub">members' volumes stay matched — independent of Google cast groups</span></h2>
@@ -405,11 +412,22 @@ function groupCard(g: Group): string {
       <button class="btn icon" data-act="gpause">⏸</button>
       <button class="btn icon" data-act="gnext">⏭</button>
     </div>
-    <div class="member-list">
-      ${state.devices.filter((d) => !d.is_cast_group).map((d) => `
-        <label class="chk"><input type="checkbox" data-member="${esc(d.id)}" ${g.member_ids.includes(d.id) ? "checked" : ""} /> ${esc(displayName(d))}</label>
-      `).join("")}
-    </div>
+    ${MEMBER_KINDS.map((k) => {
+      const devs = state.devices.filter((d) => !d.is_cast_group && k.match(d));
+      if (devs.length === 0) return "";
+      const all = devs.every((d) => g.member_ids.includes(d.id));
+      return `
+      <div class="member-kind">
+        <div class="member-head">
+          <span>${k.title}</span>
+          <button class="btn mini" data-select-kind="${k.key}">${all ? "Clear all" : "Select all"}</button>
+        </div>
+        <div class="member-list">
+          ${devs.map((d) => `
+            <label class="chk"><input type="checkbox" data-member="${esc(d.id)}" ${g.member_ids.includes(d.id) ? "checked" : ""} /> ${esc(displayName(d))}</label>`).join("")}
+        </div>
+      </div>`;
+    }).join("")}
   </div>`;
 }
 
@@ -436,6 +454,15 @@ function wireGroupCard(g: Group) {
   for (const [act, action] of [["gplay", "play"], ["gpause", "pause"], ["gnext", "next"], ["gprev", "prev"]] as const) {
     card.querySelector(`[data-act="${act}"]`)!.addEventListener("click", () => invoke("group_media", { groupId: g.id, action }));
   }
+  card.querySelectorAll<HTMLElement>("[data-select-kind]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const kind = MEMBER_KINDS.find((k) => k.key === btn.dataset.selectKind)!;
+      const ids = state.devices.filter((d) => !d.is_cast_group && kind.match(d)).map((d) => d.id);
+      const all = ids.every((id) => g.member_ids.includes(id));
+      g.member_ids = all ? g.member_ids.filter((m) => !ids.includes(m)) : [...new Set([...g.member_ids, ...ids])];
+      saveGroups();
+    });
+  });
   card.querySelectorAll("[data-member]").forEach((el) => {
     el.addEventListener("change", () => {
       const id = (el as HTMLElement).dataset.member!;
