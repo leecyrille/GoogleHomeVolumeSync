@@ -45,7 +45,9 @@ struct Showing {
 }
 
 struct Win {
-    end: chrono::DateTime<Local>,
+    /// Until when it may still start (it waits for a show to end, up to the idle time).
+    start_by: chrono::DateTime<Local>,
+    idle: Duration,
     shown: bool,
     turned_on: bool,
     power_asked: Option<Instant>,
@@ -479,48 +481,35 @@ fn parse_hm(s: &str) -> (u32, u32) {
     (it.next().unwrap_or(7).min(23), it.next().unwrap_or(0).min(59))
 }
 
-/// Start, watch and end scheduled calendar times. Returns true if anything changed.
+/// Start scheduled calendar times, then turn the TV off once nobody has used the remote
+/// for the chosen time. Returns true if anything changed.
 async fn run_schedules(core: &Arc<Core>, devs: &HashMap<String, Dev>) -> bool {
     let cfg = core.inner.lock().unwrap().cfg.calendar.clone();
     let now = Local::now();
     let mut changed = false;
     let mut actions: Vec<(String, String, ShowOpts)> = Vec::new(); // (window key, device, opts) to show
 
-    for s in cfg.schedules.iter().filter(|s| s.enabled && !s.devices.is_empty() && s.duration_min > 0) {
+    for s in cfg.schedules.iter().filter(|s| s.enabled && !s.devices.is_empty()) {
         let (h, m) = parse_hm(&s.start);
+        let idle = s.idle_minutes();
         for back in [0i64, 1] {
             let date = now.date_naive() - chrono::Duration::days(back);
             if !s.days[date.weekday().num_days_from_monday() as usize] {
                 continue;
             }
             let Some(start) = date.and_hms_opt(h, m, 0).and_then(|t| Local.from_local_datetime(&t).earliest()) else { continue };
-            let end = start + chrono::Duration::minutes(s.duration_min as i64);
-            if now < start || now >= end {
+            let start_by = start + chrono::Duration::minutes(idle as i64);
+            if now < start || now >= start_by {
                 continue;
             }
             for id in &s.devices {
                 let key = format!("{}|{}|{}", s.id, date, id);
                 let Some(d) = devs.get(id) else { continue };
                 let mut r = rt();
-                let showing_here = r.showing.get(id).map(|x| x.window.as_deref() == Some(key.as_str())).unwrap_or(false);
-                let touched = r.showing.get(id).map(|x| x.touched.elapsed());
-                let w = r.windows.entry(key.clone()).or_insert(Win { end, shown: false, turned_on: false, power_asked: None, done: false });
-                if w.done {
-                    continue;
-                }
-                if w.shown {
-                    if !showing_here {
-                        w.done = true; // someone switched away: leave the TV alone
-                        continue;
-                    }
-                    // Nobody has pressed a button for a while: turn it off early.
-                    if s.idle_off_min > 0 && touched.map(|t| t >= Duration::from_secs(s.idle_off_min as u64 * 60)).unwrap_or(false) {
-                        w.done = true;
-                        drop(r);
-                        info!(id=%id, "calendar: nobody used the remote; turning off");
-                        finish(core, id, d.backend, true);
-                        changed = true;
-                    }
+                let w = r.windows.entry(key.clone()).or_insert(Win {
+                    start_by, idle: Duration::from_secs(idle as u64 * 60), shown: false, turned_on: false, power_asked: None, done: false,
+                });
+                if w.done || w.shown {
                     continue;
                 }
                 if !d.online && d.backend != Backend::Roku {
@@ -559,28 +548,46 @@ async fn run_schedules(core: &Arc<Core>, devs: &HashMap<String, Dev>) -> bool {
         changed = true;
     }
 
-    // Windows that ended: take the calendar down (and the TV off, if chosen).
-    let ended: Vec<(String, bool)> = {
+    // Shown by a schedule: leave it alone once someone switches away; turn it off once
+    // nobody has pressed a button for the chosen time. Never shown in time: give up.
+    let watch: Vec<(String, bool, Duration, chrono::DateTime<Local>)> = {
         let r = rt();
-        r.windows.iter().filter(|(_, w)| !w.done && now >= w.end).map(|(k, w)| (k.clone(), w.shown)).collect()
+        r.windows.iter().filter(|(_, w)| !w.done).map(|(k, w)| (k.clone(), w.shown, w.idle, w.start_by)).collect()
     };
-    for (key, shown) in ended {
+    for (key, shown, idle, start_by) in watch {
         let id = key.rsplit('|').next().unwrap_or("").to_string();
-        let sched_id = key.split('|').next().unwrap_or("");
-        let off_after = cfg.schedules.iter().find(|s| s.id == sched_id).map(|s| s.off_after).unwrap_or(false);
-        let still = rt().showing.get(&id).map(|x| x.window.as_deref() == Some(key.as_str())).unwrap_or(false);
-        if let Some(w) = rt().windows.get_mut(&key) {
-            w.done = true;
+        if !shown {
+            if now >= start_by {
+                if let Some(w) = rt().windows.get_mut(&key) {
+                    w.done = true; // the TV stayed busy: skip today
+                }
+            }
+            continue;
         }
-        if shown && still {
-            let backend = devs.get(&id).map(|d| d.backend).unwrap_or(Backend::Cast);
-            info!(id=%id, off_after, "calendar: scheduled time is over");
-            finish(core, &id, backend, off_after);
-            changed = true;
+        let touched = {
+            let r = rt();
+            r.showing.get(&id).filter(|x| x.window.as_deref() == Some(key.as_str())).map(|x| x.touched.elapsed())
+        };
+        match touched {
+            None => {
+                if let Some(w) = rt().windows.get_mut(&key) {
+                    w.done = true; // someone switched to something else
+                }
+            }
+            Some(t) if t >= idle => {
+                if let Some(w) = rt().windows.get_mut(&key) {
+                    w.done = true;
+                }
+                let backend = devs.get(&id).map(|d| d.backend).unwrap_or(Backend::Cast);
+                info!(id=%id, "calendar: nobody used the remote; turning off");
+                finish(core, &id, backend, true);
+                changed = true;
+            }
+            Some(_) => {}
         }
     }
-    // Forget windows from before yesterday.
-    rt().windows.retain(|_, w| now - w.end < chrono::Duration::days(2));
+    // Forget old days.
+    rt().windows.retain(|_, w| now - w.start_by < chrono::Duration::days(2));
     changed
 }
 

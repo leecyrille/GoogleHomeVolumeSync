@@ -74,8 +74,8 @@ interface Settings { start_with_windows: boolean; auto_update: boolean; }
 interface SyncView { members: string[]; paused: boolean; spread_ms?: number | null; status: string; }
 interface CalFeed { url: string; name: string; color: string; enabled: boolean; }
 interface CalSchedule {
-  id: string; enabled: boolean; days: boolean[]; start: string; duration_min: number; devices: string[];
-  theme: string; views: string[]; rotate_secs: number; power_on: boolean; dont_interrupt: boolean; off_after: boolean; idle_off_min: number;
+  id: string; enabled: boolean; days: boolean[]; start: string; devices: string[];
+  theme: string; views: string[]; rotate_secs: number; power_on: boolean; dont_interrupt: boolean; idle_off_min: number;
 }
 interface DisplaySettings { theme: string; views: string[]; rotate_secs: number; text_pct: number; photos: boolean; }
 interface CalSettings {
@@ -647,8 +647,8 @@ async function castPlay(link: boolean) {
 const calBusy = new Set<string>();
 const VIEW_NAMES: Record<string, string> = { month: "Month", week: "Week", day: "Day" };
 const ROTATE_CHOICES: [number, string][] = [[0, "Don't switch"], [15, "15 seconds"], [30, "30 seconds"], [60, "1 minute"], [120, "2 minutes"], [300, "5 minutes"], [600, "10 minutes"]];
-const DURATIONS: [number, string][] = [[15, "15 min"], [30, "30 min"], [45, "45 min"], [60, "1 hour"], [90, "1½ hours"], [120, "2 hours"], [180, "3 hours"], [240, "4 hours"], [360, "6 hours"], [480, "8 hours"], [720, "12 hours"]];
-const IDLE_CHOICES = [10, 15, 20, 30, 45, 60, 90];
+const IDLE_CHOICES: [number, string][] = [[5, "5 minutes"], [10, "10 minutes"], [15, "15 minutes"], [20, "20 minutes"], [30, "30 minutes"], [45, "45 minutes"],
+  [60, "1 hour"], [90, "1½ hours"], [120, "2 hours"], [150, "2½ hours"], [180, "3 hours"], [240, "4 hours"], [300, "5 hours"], [360, "6 hours"], [480, "8 hours"], [600, "10 hours"], [720, "12 hours"]];
 const TEXT_SIZES: [number, string][] = [[75, "75%"], [100, "100% (big TV)"], [125, "125%"], [150, "150%"], [175, "175%"], [200, "200%"], [250, "250% (small display)"], [300, "300%"], [350, "350%"]];
 const calCfgOpen = new Set<string>();
 
@@ -765,7 +765,6 @@ function renderCalendar() {
       <div class="row wrap">
         <label class="chk"><input type="checkbox" data-cs="enabled" ${sc.enabled ? "checked" : ""}> On</label>
         ${timePicker(sc.start)}
-        <span class="lbl">for</span> ${selectOf('data-cs="duration_min"', sc.duration_min, DURATIONS)}
         <div class="day-row">${DAY_NAMES.map((n, i) => `<label>${n}<input type="checkbox" data-csday="${i}" ${sc.days[i] ? "checked" : ""} /></label>`).join("")}</div>
         <div class="grow"></div>
         <button class="btn danger mini" data-cs="delete">Delete</button>
@@ -779,10 +778,9 @@ function renderCalendar() {
         <div class="lbl">TV</div>
         <div class="cal-opts">
           <label class="chk"><input type="checkbox" data-cs="power_on" ${sc.power_on ? "checked" : ""}> Turn the TV on if it's off</label>
-          <label class="chk"><input type="checkbox" data-cs="dont_interrupt" ${sc.dont_interrupt ? "checked" : ""}> Don't interrupt a show or movie (the screensaver and home screen are fine); it waits until it's over</label>
-          <label class="chk"><input type="checkbox" data-cs="off_after" ${sc.off_after ? "checked" : ""}> When the time's up, turn the TV off if it's still showing the calendar</label>
-          <label class="chk"><input type="checkbox" data-cs="idle_on" ${sc.idle_off_min > 0 ? "checked" : ""}> Turn it off early if nobody presses a remote button for
-            ${selectOf('data-cs="idle_off_min"', sc.idle_off_min || 30, IDLE_CHOICES.map((m) => [m, `${m} minutes`]))}</label>
+          <label class="chk"><input type="checkbox" data-cs="dont_interrupt" ${sc.dont_interrupt ? "checked" : ""}> Don't interrupt a show or movie (it waits for it to end; the screensaver and home screen are fine)</label>
+          <div class="cal-idle">Turn the TV off once nobody has pressed a remote button for ${selectOf('data-cs="idle_off_min"', sc.idle_off_min || 90, IDLE_CHOICES)}
+            <span class="hint-inline">Google displays stop showing it after that long. If the TV stays busy that long, the calendar skips the day.</span></div>
         </div>
       </div>
     </div>`;
@@ -826,7 +824,7 @@ function renderCalendar() {
 
     <section class="cal-sec">
       <h3>Scheduled times <button class="btn mini primary" id="cal-add-sched">+ New</button></h3>
-      ${s.schedules.map(schedCardHtml).join("") || `<div class="hint">For example: weekdays at 7:00 AM for 1½ hours in light mode, turning the TV on and back off.</div>`}
+      ${s.schedules.map(schedCardHtml).join("") || `<div class="hint">For example: weekdays at 7:00 AM in light mode, turning the TV on, and off again once nobody has used the remote for 1½ hours.</div>`}
     </section>
 
     <section class="cal-sec">
@@ -887,9 +885,9 @@ function wireCalendarPage() {
   // schedules
   q("#cal-add-sched")?.addEventListener("click", () => edit((s) => {
     s.schedules.push({
-      id: crypto.randomUUID(), enabled: true, days: [true, true, true, true, true, false, false], start: "07:00", duration_min: 90,
+      id: crypto.randomUUID(), enabled: true, days: [true, true, true, true, true, false, false], start: "07:00",
       devices: calendarScreens(true).filter((d) => d.backend === "roku").map((d) => d.id), theme: "light", views: ["month"], rotate_secs: 0,
-      power_on: true, dont_interrupt: true, off_after: true, idle_off_min: 0,
+      power_on: true, dont_interrupt: true, idle_off_min: 90,
     });
   }));
   all(".cal-sched").forEach((card) => {
@@ -897,13 +895,10 @@ function wireCalendarPage() {
     const upd = (f: (sc: CalSchedule) => void) => edit((s) => { const sc = s.schedules.find((x) => x.id === id); if (sc) f(sc); });
     const cs = (name: string) => card.querySelector<HTMLInputElement & HTMLSelectElement>(`[data-cs="${name}"]`);
     cs("enabled")?.addEventListener("change", (e) => upd((sc) => { sc.enabled = (e.target as HTMLInputElement).checked; }));
-    cs("duration_min")?.addEventListener("change", (e) => upd((sc) => { sc.duration_min = Number((e.target as HTMLSelectElement).value); }));
     cs("rotate_secs")?.addEventListener("change", (e) => upd((sc) => { sc.rotate_secs = Number((e.target as HTMLSelectElement).value); }));
-    for (const k of ["power_on", "dont_interrupt", "off_after"] as const)
+    for (const k of ["power_on", "dont_interrupt"] as const)
       cs(k)?.addEventListener("change", (e) => upd((sc) => { sc[k] = (e.target as HTMLInputElement).checked; }));
-    const idleSel = cs("idle_off_min");
-    cs("idle_on")?.addEventListener("change", (e) => upd((sc) => { sc.idle_off_min = (e.target as HTMLInputElement).checked ? Number(idleSel?.value || 30) : 0; }));
-    idleSel?.addEventListener("change", () => upd((sc) => { sc.idle_off_min = Number(idleSel.value); }));
+    cs("idle_off_min")?.addEventListener("change", (e) => upd((sc) => { sc.idle_off_min = Number((e.target as HTMLSelectElement).value); }));
     cs("delete")?.addEventListener("click", () => edit((s) => { s.schedules = s.schedules.filter((x) => x.id !== id); }));
     all<HTMLInputElement>("[data-csday]", card).forEach((cb) => cb.addEventListener("change", () => upd((sc) => { sc.days[Number(cb.dataset.csday)] = cb.checked; })));
     all<HTMLInputElement>("[data-csdev]", card).forEach((cb) => cb.addEventListener("change", () => upd((sc) => {

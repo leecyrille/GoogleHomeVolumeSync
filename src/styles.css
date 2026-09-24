@@ -458,3 +458,5 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .disp-cfg { display: grid; grid-template-columns: 70px 1fr; gap: 8px 10px; align-items: center; margin: 2px 0 10px; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
 .cal-previews.small { margin-top: 4px; grid-template-columns: repeat(3, minmax(0, 160px)); }
 .cal-sec .cast-cols { grid-template-columns: minmax(0, 1fr); }
+.cal-idle { font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cal-idle .hint-inline { flex-basis: 100%; }

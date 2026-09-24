@@ -165,7 +165,6 @@ pub struct CalSchedule {
     pub days: [bool; 7],
     /// "HH:MM" local
     pub start: String,
-    pub duration_min: u32,
     #[serde(default)]
     pub devices: Vec<String>,
     /// "light", "dark" or "default"
@@ -181,12 +180,19 @@ pub struct CalSchedule {
     /// Leave a TV alone while it's playing something (screensavers and the home screen are fine).
     #[serde(default = "default_true")]
     pub dont_interrupt: bool,
-    /// When the time is up, turn the TV off (if it's still showing the calendar).
-    #[serde(default = "default_true")]
-    pub off_after: bool,
-    /// Turn it off early after this many minutes without a button press (0 = never).
-    #[serde(default)]
+    /// Once nobody has pressed a remote button for this many minutes, turn the TV off
+    /// (Google displays just stop showing it). Also how long it waits for a show to end.
+    #[serde(default = "default_idle")]
     pub idle_off_min: u32,
+}
+fn default_idle() -> u32 {
+    90
+}
+
+impl CalSchedule {
+    pub fn idle_minutes(&self) -> u32 {
+        if self.idle_off_min == 0 { default_idle() } else { self.idle_off_min.max(5) }
+    }
 }
 
 pub fn config_dir() -> PathBuf {
