@@ -29,3 +29,4 @@ dist/
 # Cloudflare Pages deploy cache
 .wrangler/
 
+.claude/
