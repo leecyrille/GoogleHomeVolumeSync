@@ -167,6 +167,7 @@ fn format_for_ext(ext: &str) -> Option<&'static str> {
         "ts" => Some("ts"),
         "webm" => Some("mp4"),
         "m3u8" => Some("hls"),
+        "jpg" | "jpeg" | "png" | "gif" | "bmp" => Some("image"),
         _ => None,
     }
 }
@@ -204,5 +205,32 @@ pub async fn play(ip: &str, items: &[Item]) -> Result<(), String> {
         Err("The player channel isn't installed on this TV. Use Set up video playback first.".into())
     } else {
         Err(format!("The TV refused to start playback ({}).", r.status()))
+    }
+}
+
+/// Version of the channel bundled in this build ("major.minor.build").
+pub fn bundled_version() -> String {
+    let get = |k: &str| MANIFEST.lines().find_map(|l| l.strip_prefix(&format!("{k}="))).unwrap_or("0").trim().to_string();
+    format!("{}.{}.{}", get("major_version"), get("minor_version"), get("build_version"))
+}
+
+/// Version of the player channel installed on the TV, if any.
+pub async fn installed_version(ip: &str) -> Option<String> {
+    let apps = client().get(format!("http://{ip}:8060/query/apps")).send().await.ok()?.text().await.ok()?;
+    let chunk = apps.split("<app ").find(|c| c.contains(r#"id="dev""#))?;
+    let start = chunk.find(r#"version=""#)? + 9;
+    let end = chunk[start..].find('"')? + start;
+    Some(chunk[start..end].to_string())
+}
+
+fn version_key(v: &str) -> Vec<u64> {
+    v.split('.').map(|p| p.parse().unwrap_or(0)).collect()
+}
+
+/// True when the TV has an older player channel than this build carries.
+pub async fn needs_upgrade(ip: &str) -> bool {
+    match installed_version(ip).await {
+        Some(v) => version_key(&v) < version_key(&bundled_version()),
+        None => false,
     }
 }

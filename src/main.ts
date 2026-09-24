@@ -252,6 +252,23 @@ let castPanelOpen = false;
 let castTarget = "";
 const CAST_VIDEO = ["mp4", "m4v", "webm", "mkv", "mov"];
 const CAST_AUDIO = ["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"];
+const CAST_PICTURES = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
+const ROKU_PICTURES = ["jpg", "jpeg", "png", "gif", "bmp"];
+/** Cast devices with no screen (by model name). */
+const AUDIO_ONLY = /mini|nest audio|chromecast audio|home max|^google home$|speaker/i;
+
+function canShowPictures(d: Device): boolean {
+  if (d.backend === "roku") return !!d.tv?.player_ready;
+  return d.backend === "cast" && !d.is_cast_group && !AUDIO_ONLY.test(d.model);
+}
+
+async function showPictures(d: Device) {
+  const exts = d.backend === "roku" ? ROKU_PICTURES : CAST_PICTURES;
+  const picked = await open({ multiple: true, filters: [{ name: "Pictures", extensions: exts }] });
+  const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
+  if (paths.length === 0) return;
+  try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
+}
 
 /** Devices that can play files: any Google Cast device or group, and Roku TVs with the player set up. */
 function castTargets(): Device[] {
@@ -269,13 +286,18 @@ function castPanel(): string {
       </label>
       <button class="btn" id="cast-files" ${targets.length ? "" : "disabled"}>Choose files…</button>
       <button class="btn" id="cast-link" ${targets.length ? "" : "disabled"}>Play a link…</button>
-      <div class="hint">Video goes to TVs, Nest Hubs and Chromecasts; music plays on any speaker or speaker group. Several files play in order, and a same-named .srt or .vtt next to a video becomes subtitles. Files are shared only with the device you pick, for 12 hours.</div>
+      <button class="btn" id="cast-pictures" ${targets.some((d) => d.id === castTarget && canShowPictures(d)) ? "" : "disabled title=\"Speakers and speaker groups can't show pictures\""}>🖼 Show pictures…</button>
+      <div class="hint">Video goes to TVs, Nest Hubs and Chromecasts; music plays on any speaker or speaker group. Several files play in order, and a same-named .srt or .vtt next to a video becomes subtitles. Several pictures become a slideshow (8 seconds each). Files are shared only with the device you pick, for 12 hours.</div>
     </div>`;
 }
 
 function wireCastPanel() {
   const sel = document.getElementById("cast-target") as HTMLSelectElement | null;
-  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); });
+  sel?.addEventListener("change", () => { castTarget = sel.value; sel.blur(); render(); });
+  document.getElementById("cast-pictures")?.addEventListener("click", () => {
+    const d = state.devices.find((x) => x.id === castTarget);
+    if (d) showPictures(d);
+  });
   document.getElementById("cast-files")?.addEventListener("click", async () => {
     const d = state.devices.find((x) => x.id === castTarget);
     if (!d) return;
@@ -413,6 +435,7 @@ function playRow(d: Device): string {
     <div class="tv-play">
       <button class="btn" data-act="play-files" title="Pick one or more video files on this PC; they play in order. Subtitles (.srt or .vtt with the same name) come along.">▶ Play videos…</button>
       <button class="btn" data-act="play-url" title="Paste a video link (MP4, MKV, TS or an M3U8 live stream)">🔗 Play a link…</button>
+      <button class="btn" data-act="show-pictures" title="Pick one or more pictures; several become a slideshow. Use ◀ ▶ on the remote to step through.">🖼 Show pictures…</button>
     </div>`;
   }
   const open = setupOpen.has(d.id);
@@ -535,6 +558,7 @@ function wireDeviceCard(d: Device) {
     if (paths.length === 0) return;
     try { await invoke("play_files", { id: d.id, paths }); } catch (e) { alert(String(e)); }
   });
+  q('[data-act="show-pictures"]')?.addEventListener("click", () => showPictures(d));
   q('[data-act="play-url"]')?.addEventListener("click", async () => {
     const url = prompt("Video link (MP4, MKV, TS or an M3U8 live stream):");
     if (!url) return;

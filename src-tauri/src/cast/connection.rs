@@ -36,7 +36,13 @@ struct SessionState {
     track: Track,
     /// Items waiting for the Default Media Receiver to start.
     pending_cast: Option<Vec<CastItem>>,
+    /// Pictures being shown as a slideshow, the current index, and when to advance.
+    slideshow: Option<(Vec<CastItem>, usize)>,
+    next_slide: tokio::time::Instant,
 }
+
+/// How long each picture stays up in a slideshow.
+const SLIDE_INTERVAL: Duration = Duration::from_secs(8);
 
 /// Google's Default Media Receiver: plays a URL on any Cast device.
 const DEFAULT_MEDIA_RECEIVER: &str = "CC1AD845";
@@ -104,7 +110,8 @@ impl CastActor {
     /// Returns true if the actor should shut down permanently.
     async fn session(&mut self, stream: Stream) -> bool {
         let (mut rd, mut wr) = tokio::io::split(stream);
-        let mut state = SessionState { media_transport_id: None, media_session_id: None, app_name: None, track: Track::default(), pending_cast: None };
+        let mut state = SessionState { media_transport_id: None, media_session_id: None, app_name: None, track: Track::default(), pending_cast: None,
+            slideshow: None, next_slide: tokio::time::Instant::now() };
 
         if send(&mut wr, &self.id, "receiver-0", NS_CONNECTION, &json!({"type":"CONNECT"})).await.is_err() {
             return false;
@@ -132,6 +139,14 @@ impl CastActor {
                         if let Ok(v) = serde_json::from_str::<Value>(payload) {
                             self.handle_message(&msg.source_id, &msg.namespace, &v, &mut wr, &mut state).await;
                         }
+                    }
+                }
+                _ = tokio::time::sleep_until(state.next_slide), if state.slideshow.is_some() => {
+                    state.next_slide = tokio::time::Instant::now() + SLIDE_INTERVAL;
+                    if let (Some((items, idx)), Some(tid)) = (state.slideshow.as_mut(), state.media_transport_id.clone()) {
+                        *idx = (*idx + 1) % items.len();
+                        let payload = load_one(&items[*idx]);
+                        let _ = send(&mut wr, &self.id, &tid, NS_MEDIA, &payload).await;
                     }
                 }
                 _ = heartbeat.tick() => {
@@ -194,7 +209,15 @@ impl CastActor {
             }
             DeviceCmd::Cast(items) => {
                 // Start the Default Media Receiver; the queue is loaded once it reports running.
-                state.pending_cast = Some(items);
+                // Several pictures become a slideshow the app advances itself.
+                state.slideshow = None;
+                if items.len() > 1 && items.iter().all(|i| i.is_image()) {
+                    state.slideshow = Some((items.clone(), 0));
+                    state.next_slide = tokio::time::Instant::now() + SLIDE_INTERVAL;
+                    state.pending_cast = Some(vec![items[0].clone()]);
+                } else {
+                    state.pending_cast = Some(items);
+                }
                 send(wr, &self.id, "receiver-0", NS_RECEIVER,
                     &json!({"type":"LAUNCH","requestId":next_req_id(),"appId":DEFAULT_MEDIA_RECEIVER})).await
             }
@@ -257,6 +280,7 @@ impl CastActor {
                     }
                     None => {
                         state.app_name = None;
+                        state.slideshow = None;
                         if state.media_transport_id.take().is_some() {
                             state.media_session_id = None;
                             state.track = Track::default();
@@ -374,14 +398,7 @@ fn unix_ms() -> i64 {
 /// QUEUE_LOAD for the Default Media Receiver, with WebVTT subtitles when given.
 fn queue_load(items: &[CastItem]) -> Value {
     let items: Vec<Value> = items.iter().map(|it| {
-        let music = it.content_type.starts_with("audio/");
-        let mut media = json!({
-            "contentId": it.url,
-            "contentUrl": it.url,
-            "contentType": it.content_type,
-            "streamType": "BUFFERED",
-            "metadata": { "metadataType": if music { 3 } else { 0 }, "title": it.title },
-        });
+        let mut media = media_json(it);
         let mut item = json!({ "media": media.clone(), "autoplay": true, "preloadTime": 10 });
         if let Some(sub) = &it.subtitles {
             media["tracks"] = json!([{
@@ -393,4 +410,27 @@ fn queue_load(items: &[CastItem]) -> Value {
         item
     }).collect();
     json!({ "type": "QUEUE_LOAD", "requestId": next_req_id(), "items": items, "startIndex": 0, "repeatMode": "REPEAT_OFF" })
+}
+
+fn media_json(it: &CastItem) -> Value {
+    // metadataType: 0 generic, 3 music, 4 photo. Pictures have no stream.
+    let (kind, stream) = if it.is_image() {
+        (4, "NONE")
+    } else if it.content_type.starts_with("audio/") {
+        (3, "BUFFERED")
+    } else {
+        (0, "BUFFERED")
+    };
+    json!({
+        "contentId": it.url,
+        "contentUrl": it.url,
+        "contentType": it.content_type,
+        "streamType": stream,
+        "metadata": { "metadataType": kind, "title": it.title },
+    })
+}
+
+/// LOAD a single item (used to advance a picture slideshow).
+fn load_one(it: &CastItem) -> Value {
+    json!({ "type": "LOAD", "requestId": next_req_id(), "media": media_json(it), "autoplay": true })
 }

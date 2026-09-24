@@ -9,6 +9,10 @@
     <Rectangle id="bg" width="1920" height="1080" color="0x0F1419FF" />
     <Label id="hint" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true"
       text="Volume Sync Player&#10;Choose Play videos in the Volume Sync app on your PC." />
+    <Rectangle id="photoBg" width="1920" height="1080" color="0x000000FF" visible="false" />
+    <Poster id="photo" width="1920" height="1080" loadWidth="1920" loadHeight="1080"
+      loadDisplayMode="scaleToFit" visible="false" />
+    <Timer id="slideTimer" repeat="true" duration="8" />
     <Video id="video" width="1920" height="1080" visible="false" />
   </children>
 </component>

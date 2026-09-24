@@ -42,6 +42,12 @@ pub struct CastItem {
     pub subtitles: Option<String>,
 }
 
+impl CastItem {
+    pub fn is_image(&self) -> bool {
+        self.content_type.starts_with("image/")
+    }
+}
+
 /// Snapshot of a device sent to the frontend and persisted (metadata parts).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeviceInfo {

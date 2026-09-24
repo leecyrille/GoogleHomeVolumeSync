@@ -115,7 +115,7 @@ async fn tv_ready(core: &Core, id: &str) -> Result<String, String> {
 }
 
 /// Files a Google Cast device's Default Media Receiver can play.
-const CAST_EXTS: &[&str] = &["mp4", "m4v", "webm", "mkv", "mov", "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"];
+const CAST_EXTS: &[&str] = &["mp4", "m4v", "webm", "mkv", "mov", "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "jpg", "jpeg", "png", "gif", "bmp", "webp"];
 
 fn device_backend(core: &Core, id: &str) -> Result<(Backend, String), String> {
     let inner = core.inner.lock().unwrap();
@@ -129,7 +129,11 @@ async fn cast_files(core: &Core, id: &str, ip: &str, paths: &[std::path::PathBuf
         .filter(|p| !p.extension().and_then(|e| e.to_str()).map(|e| CAST_EXTS.contains(&e.to_ascii_lowercase().as_str())).unwrap_or(false))
         .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from)).collect();
     if !unsupported.is_empty() {
-        return Err(format!("Cast devices play MP4, WebM, MKV and MOV video and MP3, M4A, AAC, FLAC, WAV and OGG audio. Not supported: {}", unsupported.join(", ")));
+        return Err(format!("Cast devices play MP4, WebM, MKV and MOV video, MP3, M4A, AAC, FLAC, WAV and OGG audio, and JPG, PNG, GIF, BMP and WebP pictures. Not supported: {}", unsupported.join(", ")));
+    }
+    let pictures = paths.iter().filter(|p| crate::media_server::content_type(p).starts_with("image/")).count();
+    if pictures > 0 && pictures < paths.len() {
+        return Err("Choose either pictures or videos and music, not both at once.".into());
     }
     let mut items = Vec::new();
     for p in paths {
@@ -166,9 +170,26 @@ pub async fn play_files(core: CoreState<'_>, id: String, paths: Vec<String>) -> 
     let unsupported: Vec<String> = paths.iter().filter(|p| stream_format(p).is_none())
         .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from)).collect();
     if !unsupported.is_empty() {
-        return Err(format!("Roku TVs play MP4, MOV, MKV and TS video files. Not supported: {}", unsupported.join(", ")));
+        return Err(format!("Roku TVs play MP4, MOV, MKV and TS videos and JPG, PNG, GIF and BMP pictures. Not supported: {}", unsupported.join(", ")));
+    }
+    let pictures = paths.iter().filter(|p| stream_format(p) == Some("image")).count();
+    if pictures > 0 && pictures < paths.len() {
+        return Err("Choose either pictures or videos, not both at once.".into());
     }
     let ip = tv_ready(&core, &id).await?;
+    // Keep the player channel current (e.g. pictures need a newer version).
+    if crate::backends::roku_player::needs_upgrade(&ip).await {
+        let password = core.inner.lock().unwrap().cfg.roku_dev_passwords.get(&id).cloned();
+        match password {
+            Some(pw) => {
+                info!(id=%id, "roku player: upgrading channel");
+                crate::backends::roku_player::install(&ip, &pw).await?;
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            None if pictures > 0 => return Err("Showing pictures needs a newer player on this TV. Run Set up video playback again.".into()),
+            None => {}
+        }
+    }
     let mut items = Vec::new();
     for p in &paths {
         let subtitles = match sidecar_subtitles(p) {
