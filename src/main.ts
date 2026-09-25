@@ -134,6 +134,8 @@ function isPlaying(m: MediaInfo): boolean {
 function nowPlaying(): Device[] {
   return state.devices
     .filter((d) => d.online && d.media && d.media.supports_transport && (isPlaying(d.media) || d.media.state === "PAUSED"))
+    // The calendar picture and broadcast messages aren't something to play or skip.
+    .filter((d) => !(d.media!.app === "Default Media Receiver" && (d.media!.title === "Calendar" || d.media!.title === "Message")))
     .sort((a, b) => Number(isPlaying(b.media!)) - Number(isPlaying(a.media!)) || displayName(a).localeCompare(displayName(b)));
 }
 

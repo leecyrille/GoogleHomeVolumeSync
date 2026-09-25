@@ -416,7 +416,7 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .cal-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .cal-previews figure { margin: 0; cursor: zoom-in; }
 .cal-previews img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; background: #000; }
-.cal-previews figure.missing img { visibility: hidden; }
+.cal-previews figure.missing { display: none; }
 .cal-previews figcaption { font-size: 12px; color: var(--text-dim); margin-top: 4px; text-align: center; }
 .cal-sched { margin: 10px 0 0; }
 .cal-sched-grid { display: grid; grid-template-columns: 70px 1fr; gap: 10px 12px; align-items: start; margin-top: 12px; }

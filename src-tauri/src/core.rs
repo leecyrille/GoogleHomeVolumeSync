@@ -467,12 +467,16 @@ impl Core {
     /// Sessions that are playing or paused, playing first. Cast groups hold
     /// their own session, so a group cast shows once rather than per speaker.
     pub fn now_playing(&self) -> Vec<NowPlaying> {
+        // The calendar picture and broadcast messages aren't something to play or skip.
+        fn is_app_picture(m: &crate::types::MediaInfo) -> bool {
+            m.app.as_deref() == Some("Default Media Receiver") && matches!(m.title.as_deref(), Some("Calendar" | "Message"))
+        }
         let inner = self.inner.lock().unwrap();
         let mut list: Vec<NowPlaying> = inner.devices.values()
             .filter(|e| e.info.online)
             .filter_map(|e| {
                 let m = e.info.media.as_ref()?;
-                if !m.supports_transport {
+                if !m.supports_transport || is_app_picture(m) {
                     return None;
                 }
                 let playing = matches!(m.state.as_str(), "PLAYING" | "BUFFERING");
