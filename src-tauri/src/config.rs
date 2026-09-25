@@ -57,6 +57,32 @@ pub struct AppConfig {
     /// Showing the PactoTech Calendar Saver on TVs.
     #[serde(default)]
     pub calendar: CalendarConfig,
+    /// Spoken messages to Google speakers.
+    #[serde(default)]
+    pub broadcast: BroadcastConfig,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BroadcastConfig {
+    /// Volume while the message plays (0..1).
+    #[serde(default = "default_broadcast_volume")]
+    pub volume: f32,
+    #[serde(default = "default_true")]
+    pub chime: bool,
+    /// A Windows voice by name (None = the default voice).
+    #[serde(default)]
+    pub voice: Option<String>,
+    /// The speakers picked last time.
+    #[serde(default)]
+    pub targets: Vec<String>,
+}
+fn default_broadcast_volume() -> f32 {
+    0.6
+}
+impl Default for BroadcastConfig {
+    fn default() -> Self {
+        BroadcastConfig { volume: default_broadcast_volume(), chime: true, voice: None, targets: Vec::new() }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

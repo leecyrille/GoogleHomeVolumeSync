@@ -5,6 +5,7 @@ mod config;
 mod core;
 mod media_server;
 mod calendar;
+mod broadcast;
 mod cal_feeds;
 mod cal_render;
 mod cal_video;
@@ -79,6 +80,8 @@ pub fn run() {
             commands::open_log_folder,
             commands::open_notices,
             commands::list_media_files,
+            commands::broadcast,
+            commands::broadcast_voices,
             commands::calendar_show,
             commands::calendar_stop,
             commands::calendar_screensaver,

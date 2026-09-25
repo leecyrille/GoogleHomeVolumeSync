@@ -439,6 +439,29 @@ pub fn stop_sync(core: CoreState) {
     core.emit_state();
 }
 
+/// Speak a message on Google speakers: pause, broadcast volume, message, volume back, resume.
+#[tauri::command]
+pub async fn broadcast(core: CoreState<'_>, request: crate::broadcast::Request) -> Result<crate::broadcast::Outcome, String> {
+    info!(targets=?request.targets, chars = request.text.len(), "ui: broadcast");
+    {
+        let mut inner = core.inner.lock().unwrap();
+        let b = &mut inner.cfg.broadcast;
+        b.volume = request.volume.clamp(0.0, 1.0);
+        b.chime = request.chime;
+        b.voice = request.voice.clone();
+        b.targets = request.targets.clone();
+        inner.cfg_dirty = true;
+    }
+    let core_arc: Arc<Core> = (*core).clone();
+    crate::broadcast::broadcast(&core_arc, request).await
+}
+
+/// The Windows voices a message can be spoken with.
+#[tauri::command]
+pub async fn broadcast_voices() -> Vec<String> {
+    tokio::task::spawn_blocking(crate::broadcast::voices).await.unwrap_or_default()
+}
+
 /// Every playable file in a folder and its subfolders, in natural order (2 before 10).
 #[tauri::command]
 pub fn list_media_files(folder: String, extensions: Vec<String>) -> Result<Vec<String>, String> {

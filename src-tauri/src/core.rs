@@ -31,6 +31,8 @@ pub struct CoreInner {
     pub tray_sig: String,
     /// A file playing in step across several devices, if any.
     pub sync: Option<crate::sync_play::SyncSession>,
+    /// Speakers whose volume changes aren't copied to their sync groups (during a broadcast).
+    pub hold_sync: std::collections::HashSet<String>,
 }
 
 /// An active playback session, for the tray's now-playing section.
@@ -58,6 +60,7 @@ pub struct Snapshot {
     pub settings: crate::config::Settings,
     pub sync: Option<SyncView>,
     pub calendar: crate::calendar::CalendarView,
+    pub broadcast: crate::config::BroadcastConfig,
 }
 
 #[derive(Serialize, Clone)]
@@ -83,7 +86,7 @@ impl Core {
         }
         info!(count = devices.len(), "core: loaded known devices from config");
         Core {
-            inner: Mutex::new(CoreInner { cfg, devices, pending: HashMap::new(), cfg_dirty: false, tray_sig: String::new(), sync: None }),
+            inner: Mutex::new(CoreInner { cfg, devices, pending: HashMap::new(), cfg_dirty: false, tray_sig: String::new(), sync: None, hold_sync: Default::default() }),
             event_tx,
             lg_key_tx,
             app,
@@ -131,6 +134,7 @@ impl Core {
             schedules: inner.cfg.schedules.clone(),
             settings: inner.cfg.settings.clone(),
             calendar: crate::calendar::view(&inner.cfg.calendar),
+            broadcast: inner.cfg.broadcast.clone(),
             sync: inner.sync.as_ref().map(|s| SyncView {
                 members: s.members.clone(),
                 paused: s.paused,
@@ -607,7 +611,7 @@ impl Core {
                             .unwrap_or(false);
                         if is_echo {
                             inner.pending.remove(&id);
-                        } else if changed && old.is_some() {
+                        } else if changed && old.is_some() && !inner.hold_sync.contains(&id) {
                             // External change: propagate to sync groups.
                             // Logical volume = actual / source gain; each peer
                             // gets logical x its own gain.

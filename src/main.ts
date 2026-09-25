@@ -89,7 +89,8 @@ interface CalendarView {
   rendering: boolean; updated?: number | null; error?: string | null; feeds: FeedStatus[]; events: number; photos: number;
   showing: string[]; screensaver_tvs: string[]; outdated: string[]; settings: CalSettings; saver_found: boolean;
 }
-interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; }
+interface BroadcastPrefs { volume: number; chime: boolean; voice?: string | null; targets: string[]; }
+interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; broadcast?: BroadcastPrefs; }
 
 let state: Snapshot = { devices: [], groups: [], schedules: [], settings: { start_with_windows: false, auto_update: false } };
 let view = "devices";
@@ -642,6 +643,76 @@ async function castPlay(link: boolean) {
   try { await invoke("play_synced", { ids, path: paths[0] }); } catch (e) { alert(String(e)); }
 }
 
+// ---------------- broadcast ----------------
+
+/** Speak a message on Google speakers: pause, broadcast volume, message, volume back, resume. */
+async function openBroadcast() {
+  const prefs: BroadcastPrefs = state.broadcast ?? { volume: 0.6, chime: true, voice: null, targets: [] };
+  const google = state.devices.filter((d) => d.backend === "cast" && d.online);
+  const groups = google.filter((d) => d.is_cast_group);
+  const speakers = google.filter((d) => !d.is_cast_group);
+  const picked = new Set(prefs.targets.filter((id) => google.some((d) => d.id === id)));
+  const voices = await invoke<string[]>("broadcast_voices").catch(() => [] as string[]);
+  const wrap = document.createElement("div");
+  wrap.className = "dialog-back";
+  const col = (title: string, ds: Device[]) => ds.length === 0 ? "" : `
+      <div class="cast-col"><div class="cast-col-head"><span>${title}</span><button class="linkish" data-bc-all="${title}">All</button></div>
+        ${ds.map((d) => `<label class="chk"><input type="checkbox" data-bc="${esc(d.id)}" data-bc-col="${title}" ${picked.has(d.id) ? "checked" : ""}> ${esc(displayName(d))}</label>`).join("")}
+      </div>`;
+  wrap.innerHTML = `
+    <div class="dialog bc-dialog" role="dialog" aria-modal="true">
+      <h3>📢 Broadcast a message</h3>
+      <textarea id="bc-text" rows="3" placeholder="Dinner's ready!" maxlength="600"></textarea>
+      <div class="cast-cols">${col("Speaker groups", groups)}${col("Speakers & displays", speakers)}</div>
+      <div class="bc-opts">
+        <label class="bc-vol">Volume <input type="range" id="bc-volume" min="5" max="100" step="5" value="${Math.round(prefs.volume * 100)}"> <b id="bc-volume-pct">${Math.round(prefs.volume * 100)}%</b></label>
+        <label class="chk"><input type="checkbox" id="bc-chime" ${prefs.chime ? "checked" : ""}> Chime first</label>
+        ${voices.length ? `<label>Voice <select id="bc-voice"><option value="">Windows default</option>${voices.map((v) => `<option ${v === prefs.voice ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : ""}
+      </div>
+      <div class="hint">Whatever's playing is paused, the message plays at this volume, then each speaker's volume goes back and anything this app was playing carries on. Spotify and other apps close on those speakers during the message: press play again there.</div>
+      <div class="bc-result" id="bc-result"></div>
+      <div class="dialog-actions">
+        <button class="btn" data-bc-close>Close</button>
+        <button class="btn primary" id="bc-send">Broadcast</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const text = wrap.querySelector<HTMLTextAreaElement>("#bc-text")!;
+  const vol = wrap.querySelector<HTMLInputElement>("#bc-volume")!;
+  const send = wrap.querySelector<HTMLButtonElement>("#bc-send")!;
+  const result = wrap.querySelector<HTMLElement>("#bc-result")!;
+  text.focus();
+  vol.addEventListener("input", () => { wrap.querySelector("#bc-volume-pct")!.textContent = `${vol.value}%`; });
+  wrap.querySelectorAll<HTMLInputElement>("[data-bc]").forEach((cb) => cb.addEventListener("change", () => {
+    if (cb.checked) picked.add(cb.dataset.bc!); else picked.delete(cb.dataset.bc!);
+  }));
+  wrap.querySelectorAll<HTMLElement>("[data-bc-all]").forEach((b) => b.addEventListener("click", () => {
+    const boxes = [...wrap.querySelectorAll<HTMLInputElement>(`[data-bc-col="${b.dataset.bcAll}"]`)];
+    const on = !boxes.every((x) => x.checked);
+    boxes.forEach((x) => { x.checked = on; if (on) picked.add(x.dataset.bc!); else picked.delete(x.dataset.bc!); });
+  }));
+  wrap.addEventListener("click", (e) => { if (e.target === wrap || (e.target as HTMLElement).closest("[data-bc-close]")) wrap.remove(); });
+  send.addEventListener("click", async () => {
+    if (!text.value.trim()) { text.focus(); return; }
+    if (picked.size === 0) { result.textContent = "Pick at least one speaker."; return; }
+    send.disabled = true;
+    send.textContent = "Speaking…";
+    result.textContent = "";
+    try {
+      const out = await invoke<{ resume_by_hand: string[] }>("broadcast", { request: {
+        targets: [...picked], text: text.value, chime: wrap.querySelector<HTMLInputElement>("#bc-chime")!.checked,
+        volume: Number(vol.value) / 100, voice: wrap.querySelector<HTMLSelectElement>("#bc-voice")?.value || null,
+      } });
+      result.innerHTML = out.resume_by_hand.length
+        ? `✓ Sent. Press play again on: <b>${out.resume_by_hand.map(esc).join(", ")}</b>`
+        : "✓ Sent, and everything's back as it was.";
+      text.value = "";
+    } catch (e) { result.textContent = "✕ " + String(e); }
+    send.disabled = false;
+    send.textContent = "Broadcast";
+  });
+}
+
 // ---------------- calendar on TVs ----------------
 
 const calBusy = new Set<string>();
@@ -978,6 +1049,7 @@ function renderDevices() {
       <span class="toolbar-gap"></span>
       <button class="btn ${castMode === "video" ? "primary" : ""}" data-cast-mode="video" title="Play a video or pictures from this PC on one or more screens">🎬 Play Video or Pictures</button>
       <button class="btn ${castMode === "audio" ? "primary" : ""}" data-cast-mode="audio" title="Play music from this PC on one or more speakers or TVs">🎵 Play Audio</button>
+      <button class="btn" id="broadcast-open" title="Speak a message on Google speakers: pauses the music, plays it at a set volume, then puts things back">📢 Broadcast</button>
       <button class="btn" id="go-calendar" title="Your calendar on TVs: show it, schedule it, or use it as a Roku screensaver">📅 Calendar</button>
     </div>
     ${castMode ? castPanel() : ""}
@@ -998,6 +1070,7 @@ function renderDevices() {
   });
   document.getElementById("add-manual")!.addEventListener("click", showAddManual);
   document.getElementById("go-calendar")?.addEventListener("click", () => { view = "calendar"; render(); });
+  document.getElementById("broadcast-open")?.addEventListener("click", openBroadcast);
   document.querySelectorAll<HTMLElement>("[data-cast-mode]").forEach((b) => b.addEventListener("click", () => {
     const mode = b.dataset.castMode as CastMode;
     castMode = castMode === mode ? "" : mode;

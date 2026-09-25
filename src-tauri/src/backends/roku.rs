@@ -362,6 +362,7 @@ impl RokuActor {
             position_ms,
             duration_ms,
             position_at: position_ms.map(|_| unix_ms()),
+            ..Default::default()
         });
         let changed = match (&media, &last.media) {
             (Some(a), Some(b)) => a.state != b.state || a.app != b.app,

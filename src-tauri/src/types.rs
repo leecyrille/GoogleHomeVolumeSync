@@ -13,6 +13,11 @@ pub enum Backend {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct MediaInfo {
     pub state: String, // PLAYING / PAUSED / IDLE / BUFFERING
+    /// What's playing, when the source says (Cast "contentId"; a URL for media this app cast).
+    #[serde(default)]
+    pub content_id: Option<String>,
+    #[serde(default)]
+    pub content_type: Option<String>,
     pub title: Option<String>,
     pub artist: Option<String>,
     pub app: Option<String>,

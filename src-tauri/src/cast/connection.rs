@@ -49,6 +49,8 @@ const DEFAULT_MEDIA_RECEIVER: &str = "CC1AD845";
 
 #[derive(Default)]
 struct Track {
+    content_id: Option<String>,
+    content_type: Option<String>,
     title: Option<String>,
     artist: Option<String>,
     album: Option<String>,
@@ -322,6 +324,8 @@ impl CastActor {
                     if meta.is_object() {
                         let text = |k: &str| meta[k].as_str().filter(|t| !t.is_empty()).map(String::from);
                         state.track = Track {
+                            content_id: state.track.content_id.take(),
+                            content_type: state.track.content_type.take(),
                             title: text("title"),
                             artist: text("artist").or_else(|| text("albumArtist")).or_else(|| text("subtitle")),
                             album: text("albumName"),
@@ -332,9 +336,15 @@ impl CastActor {
                             duration_ms: state.track.duration_ms,
                         };
                     }
+                    if let Some(cid) = s["media"]["contentId"].as_str().filter(|c| !c.is_empty()) {
+                        state.track.content_id = Some(cid.to_string());
+                        state.track.content_type = s["media"]["contentType"].as_str().map(String::from);
+                    }
                     let position_ms = s["currentTime"].as_f64().map(|t| (t * 1000.0) as u64);
                     let media = MediaInfo {
                         state: s["playerState"].as_str().unwrap_or("IDLE").to_string(),
+                        content_id: state.track.content_id.clone(),
+                        content_type: state.track.content_type.clone(),
                         title: state.track.title.clone(),
                         artist: state.track.artist.clone(),
                         app: state.app_name.clone(),
