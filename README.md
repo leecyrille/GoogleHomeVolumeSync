@@ -2,19 +2,43 @@
 
 **Website: [googlehomevolumesync.com](https://googlehomevolumesync.com)** &nbsp;&middot;&nbsp; **[Download for Windows](https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe)** &nbsp;&middot;&nbsp; **[&#9749; Buy me a coffee](https://pactotech.com/products/google-home-volume-sync-tip-jar)**
 
-A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control — fully local, no cloud APIs.
+A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control, puts your family calendar on your TVs, casts your own files, and broadcasts spoken messages. Fully local, no cloud APIs.
 
 ## Screenshots
 
-Every speaker on the network, with live volume sliders and a per-device Sync Gain for balancing rooms:
+*Shown with a sample house and calendar.*
+
+Every speaker on the network, with live volume sliders and a per-device Sync Gain for balancing rooms; Roku TVs get power, inputs, what's on screen and a remote:
 
 ![Devices](docs/screenshots/devices.png)
+
+Your calendar on the TV, with photos and a clock you can read from across the room (month, week or day; light or dark; real 4K on Roku):
+
+![Calendar on a TV](docs/screenshots/tv-month-dark.png)
+
+Each screen gets its own text size and views, so a small Nest Hub stays readable:
+
+![Day view for a small display](docs/screenshots/tv-day-hub.png)
+
+The Calendar page: show it on a TV, keep it as a Roku screensaver, set each screen's look, schedule it, and pick your calendars and photos:
+
+![Calendar settings](docs/screenshots/calendar.png)
+
+Broadcast a spoken message: the music pauses, the message plays at your chosen volume, then everything goes back:
+
+![Broadcast](docs/screenshots/broadcast.png)
+
+Pick files or a whole folder and drag them into order, or play one song or video in sync on several devices:
+
+![Play queue](docs/screenshots/queue.png)
+
+![Play in sync](docs/screenshots/play-in-sync.png)
 
 Sync groups keep their members' volumes matched — change one anywhere and the rest follow:
 
 ![Sync Groups](docs/screenshots/groups.png)
 
-Right-click the tray icon to set a whole group in 5% steps without opening the app:
+Right-click the tray icon to set a whole group in 5% steps, or show the calendar on a TV, without opening the app:
 
 <img src="docs/screenshots/tray.png" width="330" alt="Tray menu">
 

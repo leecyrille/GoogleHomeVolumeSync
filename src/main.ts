@@ -1691,6 +1691,7 @@ function renderSettings() {
       <p class="credits">Built with <b>Tauri</b>, <b>Tokio</b>, <b>Serde</b>, <b>mdns-sd</b>, <b>prost</b>, <b>reqwest</b>, <b>rustls</b>, <b>native-tls</b>, <b>tungstenite</b>, <b>tracing</b> and <b>chrono</b>, plus about 350 other open-source packages. Thank you to everyone who maintains them.</p>
       <p class="credits">The Google Cast message format comes from Chromium's <i>cast_channel.proto</i> (BSD-3-Clause, The Chromium Authors). Roku control follows Roku's published External Control Protocol documentation.</p>
       <p class="credits">Casting files and links, queues and subtitles were inspired by <b>Web Video Caster</b> (webvideocaster.com), which does this across many kinds of devices. Volume Sync isn't affiliated with it and uses none of its code.</p>
+      <p class="credits">The TV calendar's design comes from the <b>PactoTech Calendar Saver</b> (calendarsaver.com), by the same author, and uses the <b>Inter</b> typeface (SIL Open Font License).</p>
       <div class="support-row" style="margin-top:10px"><button class="btn" id="open-notices">View all licenses</button></div>
     </div>`;
   document.getElementById("open-notices")!.addEventListener("click", () => invoke("open_notices"));

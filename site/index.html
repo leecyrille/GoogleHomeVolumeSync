@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Google Home Volume Sync — keep every speaker at the same volume</title>
-  <meta name="description" content="Free, open-source Windows app that keeps Google Home and Nest speaker volumes in sync across your house. Runs 100% locally — no cloud, no account.">
+  <meta name="description" content="Free, open-source Windows app that keeps Google Home and Nest speaker volumes in sync across your house, puts your family calendar on your TVs, and broadcasts spoken messages. Runs 100% locally, no cloud, no account.">
   <link rel="icon" href="icon.png" type="image/png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Google Home Volume Sync — every speaker at the same volume">
-  <meta property="og:description" content="Free Windows app that keeps Google Home / Nest speaker volumes matched across your home. Local only, open source.">
+  <meta property="og:description" content="Free Windows app that keeps Google Home / Nest speaker volumes matched across your home, shows your calendar on your TVs and broadcasts messages. Local only, open source.">
   <meta property="og:url" content="https://googlehomevolumesync.com/">
   <meta property="og:image" content="https://googlehomevolumesync.com/screenshots/devices.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -248,7 +248,7 @@
         <div class="hero-grid">
           <h1>Every speaker in the house, at the same volume.</h1>
           <div>
-            <p class="lead">Keep Google Home speaker and device volumes in sync with the program running on your Windows computer. It looks for changes in volume in devices, and matches the volume on devices you assign in this program. You can also adjust relative volume gain to balance volumes as desired throughout your home.</p>
+            <p class="lead">Keep Google Home speaker and device volumes in sync with the program running on your Windows computer. It looks for changes in volume in devices, and matches the volume on devices you assign in this program. You can also adjust relative volume gain to balance volumes as desired throughout your home. It also puts your family calendar on your TVs, plays your own videos and music in sync, and broadcasts spoken messages to your speakers.</p>
             <div class="actions">
               <a class="btn btn-ink" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">Download for Windows</a>
               <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View source</a>
@@ -271,7 +271,7 @@
               <div class="nb on">Devices</div>
               <div class="nb">Sync Groups</div>
               <div class="nb">Schedule</div>
-              <div class="nb">Log</div>
+              <div class="nb">Calendar</div>
               <div class="nb">Settings</div>
               <div class="sp"></div>
               <div class="dn">&#9749; Buy me a coffee</div>
@@ -306,7 +306,7 @@
       <section id="features">
         <div class="sh">
           <div class="n">02 &nbsp;Features</div>
-          <div><h2>Small app, does one job properly.</h2><p>Everything runs on your PC and your network. No Google account, subscription or hub.</p></div>
+          <div><h2>Small app, done properly.</h2><p>Everything runs on your PC and your network. No Google account, subscription or hub.</p></div>
         </div>
         <div class="feats">
           <div class="feat"><h3>Finds every Cast device</h3><p>Google Home, Nest Mini, Nest Audio, Nest Hub, Chromecasts and cast groups show up automatically.</p></div>
@@ -315,7 +315,10 @@
           <div class="feat"><h3>Tray presets</h3><p>Right-click the tray icon to set any group from 5% to 100%, or play, pause and skip.</p></div>
           <div class="feat"><h3>Schedules</h3><p>Weekly rules by day and time: bring the house down at bedtime, back up in the morning.</p></div>
           <div class="feat"><h3>Rename anything</h3><p>Give devices and groups your own names. Cast groups and TVs are listed in their own sections.</p></div>
-          <div class="feat"><h3>Cast your own files</h3><p>Play videos and music from your PC, or a link, on a Nest Hub, Chromecast, speaker group or Roku TV. Queues, subtitles and a progress bar you can drag.</p></div>
+          <div class="feat"><h3>Cast your own files</h3><p>Play videos, music and pictures from your PC, or a link, on a Nest Hub, Chromecast, speaker group or Roku TV. Pick files or a whole folder and drag them into order; subtitles and a progress bar you can drag.</p></div>
+          <div class="feat"><h3>Play in sync</h3><p>One video or song on several screens and speakers at once, kept in step. Pause or skip on any of them and the rest follow. It warns you when a mix can&rsquo;t stay exactly together.</p></div>
+          <div class="feat"><h3>Your calendar on the TV</h3><p>Google, Outlook and iCloud calendars with your photos and a big clock, on Roku TVs, Nest Hubs and Chromecasts. Month, week or day, light or dark, real 4K on Roku, a text size per screen, and on a schedule that turns the TV on and off again.<small>Also works as a Roku screensaver. The design comes from the free PactoTech Calendar Saver.</small></p></div>
+          <div class="feat"><h3>Broadcast messages</h3><p>Type &ldquo;Dinner&rsquo;s ready&rdquo; and it&rsquo;s spoken on the speakers you pick, after a chime, at your broadcast volume. The music pauses first and each volume goes back afterwards.</p></div>
           <div class="feat"><h3>A full log</h3><p>Every discovery, observed change and command, with each device&rsquo;s Cast ID and address.</p></div>
           <div class="feat"><h3>More than Google</h3><p>Roku TVs, Yamaha MusicCast receivers, LG webOS TVs and Optoma projectors can join the same groups.<small>Roku is tested on real hardware. Yamaha, LG and Optoma are written to spec but untested.</small></p></div>
         </div>
@@ -324,23 +327,47 @@
       <section id="screens">
         <div class="sh">
           <div class="n">03 &nbsp;Screenshots</div>
-          <div><h2>The real thing.</h2><p>Taken from the app running in a house with twenty Cast devices.</p></div>
+          <div><h2>The real thing.</h2><p>The app itself, shown with a sample house and calendar.</p></div>
+        </div>
+        <div class="shot">
+          <div><h3>Your calendar on the TV</h3><p>Every calendar in one month view, your photos down the side and a clock you can read from across the room. Up and Down on a Roku remote switch to the week or the day.</p></div>
+          <figure><img src="screenshots/tv-month-dark.png" width="1920" height="1080" loading="lazy" alt="Month calendar in dark mode on a TV with colored events, a big clock and family photos"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Big enough for a small screen</h3><p>Each TV and display gets its own text size, theme and views. A 7&Prime; Nest Hub on the day view, at 250%, reads fine from the kitchen table.</p></div>
+          <figure><img src="screenshots/tv-day-hub.png" width="1920" height="1080" loading="lazy" alt="Day view in light mode with two large events and a big clock, as set up for a Nest Hub"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Calendar settings</h3><p>Show it on a TV now, keep it as a Roku screensaver, or schedule it: weekdays at 7:00 in light mode, turning the TV on, and off again once nobody has used the remote for a while.</p></div>
+          <figure><img src="screenshots/calendar.png" width="1304" height="1110" loading="lazy" alt="Calendar page with TVs, per-screen settings, theme, a morning schedule and calendar feeds"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Every device, one list</h3><p>Live volume for each speaker, the name you gave it and its Sync Gain. Roku TVs get power, inputs, what&rsquo;s on screen and a remote.</p></div>
+          <figure><img src="screenshots/devices.png" width="1304" height="1130" loading="lazy" alt="Devices view with two Roku TVs and their on-screen remotes, and Google speakers with volume sliders"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Broadcast a message</h3><p>Pick speakers or speaker groups, type the message, set the volume. Whatever&rsquo;s playing pauses and everything goes back afterwards.</p></div>
+          <figure><img src="screenshots/broadcast.png" width="1304" height="892" loading="lazy" alt="Broadcast dialog with a dinner message, speaker checkboxes, volume, chime and voice"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Play a queue</h3><p>Add files or a whole folder, drag them into order, and play. The device&rsquo;s card shows what&rsquo;s next.</p></div>
+          <figure><img src="screenshots/queue.png" width="1304" height="892" loading="lazy" alt="Play queue with six videos in order, ready to play on the Living Room TV"></figure>
+        </div>
+        <div class="shot">
+          <div><h3>Play in sync</h3><p>Tick several TVs and speakers; one song or video plays on all of them in step. If a mix won&rsquo;t stay exactly together, it says why and offers to drop the odd one out.</p></div>
+          <figure><img src="screenshots/play-in-sync.png" width="1304" height="800" loading="lazy" alt="Play Audio panel with a Roku TV and a speaker group picked and a warning about sync"></figure>
         </div>
         <div class="shot">
           <div><h3>Sync groups</h3><p>Tick the speakers that belong together. Each group has its own slider and playback controls, independent of Google&rsquo;s cast groups.</p></div>
-          <figure><img src="screenshots/groups.png" width="1304" height="430" loading="lazy" alt="Sync Groups view with an Everything group and its member checkboxes"></figure>
+          <figure><img src="screenshots/groups.png" width="1304" height="892" loading="lazy" alt="Sync Groups view with Everything and Upstairs groups and their member checkboxes"></figure>
         </div>
         <div class="shot">
-          <div><h3>Volume from the tray</h3><p>No need to open the window. Right-click the icon, pick a group, pick a level.</p></div>
+          <div><h3>Volume from the tray</h3><p>No need to open the window. Right-click the icon, pick a group, pick a level, or show the calendar on a TV.</p></div>
           <figure class="narrow"><img src="screenshots/tray.png" width="364" height="719" loading="lazy" alt="Tray menu with a group submenu of 5% to 100% presets and playback controls"></figure>
         </div>
         <div class="shot">
           <div><h3>Schedules</h3><p>A time, the days it runs, and the level for each group or device. Each rule switches on and off with one checkbox.</p></div>
-          <figure><img src="screenshots/schedule.png" width="1304" height="390" loading="lazy" alt="Schedule view with a 10 PM weekday rule setting the Everything group to 50%"></figure>
-        </div>
-        <div class="shot">
-          <div><h3>Every device, one list</h3><p>Live volume for each speaker, the name you gave it, and its Sync Gain.</p></div>
-          <figure><img src="screenshots/devices.png" width="1304" height="892" loading="lazy" alt="Devices view listing Google Home and Nest speakers with volume sliders and Sync Gain"></figure>
+          <figure><img src="screenshots/schedule.png" width="1304" height="892" loading="lazy" alt="Schedule view with a 10 PM weekday rule setting the Everything group to 15%"></figure>
         </div>
       </section>
 
@@ -407,6 +434,8 @@
           <details><summary>What does Sync Gain do?</summary><p>It&rsquo;s a per-device multiplier from 0 to 200%. A speaker at 50% gain sits at half the group&rsquo;s level, and when you change that speaker it reports back at double, so the group stays consistent. Set it once and the whole house moves together at the balance you chose.</p></details>
           <details><summary>Does it run without logging in to Windows?</summary><p>Not yet. It launches when you log in and sits in the tray. On a mini PC that stays logged in, that behaves like an always-on service. A true Windows service is planned.</p></details>
           <details><summary>Does it work with my Google cast groups?</summary><p>Yes, they&rsquo;re discovered and listed separately with their own volume and playback control. They can&rsquo;t be members of a sync group, because a cast group&rsquo;s volume already comes from its speakers and syncing both would apply every change twice.</p></details>
+          <details><summary>Does the calendar need my PC to stay on?</summary><p>Yes. The PC redraws the calendar every minute and sends it to your TVs as a picture, so it needs to be on (a small mini PC is ideal). If it goes off, a Roku keeps the last picture and says when it was last updated.</p></details>
+          <details><summary>Will a broadcast stop my Spotify?</summary><p>It pauses it. A speaker can only run one casting app, so the message closes Spotify on the speakers it plays on; the app then puts every volume back and tells you where to press play again. Things the app itself was playing carry on by themselves.</p></details>
           <details><summary>Is it really free?</summary><p>Yes. The source is on GitHub, there is no telemetry and nothing to buy. The tip jar and the Amazon links are how it stays maintained.</p></details>
         </div>
       </section>
