@@ -453,7 +453,7 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .dev-queue li.past { color: var(--text-dim); opacity: .7; }
 
 /* ---- per-display calendar settings ---- */
-.cal-look { display: block; font-size: 11px; color: var(--text-dim); font-weight: 400; }
+.cal-sum { display: block; font-size: 11px; color: var(--text-dim); font-weight: 400; }
 .cal-acts .btn.on { border-color: var(--accent); color: var(--accent); }
 .disp-cfg { display: grid; grid-template-columns: 70px 1fr; gap: 8px 10px; align-items: center; margin: 2px 0 10px; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
 .cal-previews.small { margin-top: 4px; grid-template-columns: repeat(3, minmax(0, 160px)); }

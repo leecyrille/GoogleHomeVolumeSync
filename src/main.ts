@@ -814,7 +814,7 @@ function renderCalendar() {
     return `
       <div class="cal-row">
         <span class="cal-name">${esc(displayName(d))}${blocked ? ` <i>needs setup</i>` : ""}
-          <span class="cal-look">${ds.text_pct}% · ${ds.views.map((v) => VIEW_NAMES[v]).join(", ")}</span></span>
+          <span class="cal-sum">${ds.text_pct}% · ${ds.views.map((v) => VIEW_NAMES[v]).join(", ")}</span></span>
         ${showing ? `<span class="cal-on">● Showing</span>` : ""}
         <span class="cal-acts">
           ${saver}
