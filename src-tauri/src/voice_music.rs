@@ -13,10 +13,13 @@ use crate::types::Backend;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
-use tracing::info;
+use tracing::{debug, info};
 
 /// Nothing playing for this long: back to the voice volume.
-const IDLE_AFTER: Duration = Duration::from_secs(8);
+const IDLE_AFTER: Duration = Duration::from_secs(15);
+/// After the app starts, speakers and especially speaker groups take a while to report
+/// what they're playing; decide nothing until then, or music could drop to the voice volume.
+const STARTUP_GRACE: Duration = Duration::from_secs(60);
 /// Paused this long counts as stopped.
 const PAUSE_ENDS_MUSIC: Duration = Duration::from_secs(5 * 60);
 /// A change made while idle waits this long for music before the voice volume returns.
@@ -93,6 +96,7 @@ fn playing_state(inner: &CoreInner, id: &str) -> Option<String> {
 }
 
 pub async fn run(core: Arc<Core>) {
+    tokio::time::sleep(STARTUP_GRACE).await;
     let mut tick = tokio::time::interval(Duration::from_secs(2));
     loop {
         tick.tick().await;
@@ -154,8 +158,13 @@ fn step(core: &Core) {
                 let voice = voice_level(&inner, &id);
                 let intent_fresh = s.intent.get(&id).map(|(_, at)| at.elapsed() < INTENT_WINDOW).unwrap_or(false);
                 if mode != Some(Mode::Voice) {
-                    if since.elapsed() >= IDLE_AFTER || mode.is_none() {
+                    if since.elapsed() >= IDLE_AFTER {
                         s.mode.insert(id.clone(), Mode::Voice);
+                        let norm = id.to_lowercase().replace('-', "");
+                        let groups: Vec<String> = inner.devices.values().filter(|g| g.info.is_cast_group)
+                            .map(|g| format!("{}:{}:{:?}:{}", g.info.friendly_name, g.group_members.contains(&norm), g.info.media.as_ref().map(|m| m.state.clone()), g.group_members.len()))
+                            .collect();
+                        debug!(?groups, "voice/music: groups around the speaker");
                         info!(id=%id, voice, "voice/music: nothing playing; voice volume");
                         if (actual - voice).abs() > 0.01 {
                             sets.push((id.clone(), voice));
@@ -163,6 +172,11 @@ fn step(core: &Core) {
                         changed = true;
                     }
                 } else if !intent_fresh && (actual - voice).abs() > 0.02 && !inner.pending.contains_key(&id) {
+                    let norm = id.to_lowercase().replace('-', "");
+                    let groups: Vec<String> = inner.devices.values().filter(|g| g.info.is_cast_group)
+                        .map(|g| format!("{}:{}:{:?}:{}", g.info.friendly_name, g.group_members.contains(&norm), g.info.media.as_ref().map(|m| m.state.clone()), g.group_members.len()))
+                        .collect();
+                    debug!(id=%id, ?groups, own=?inner.devices.get(&id).and_then(|e| e.info.media.as_ref()).map(|m| m.state.clone()), "voice/music: groups around the speaker");
                     // Changed while idle and no music followed: the voice volume comes back.
                     s.intent.remove(&id);
                     info!(id=%id, voice, actual, "voice/music: back to the voice volume");
