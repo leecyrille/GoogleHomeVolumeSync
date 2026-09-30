@@ -39,6 +39,10 @@ interface Device {
   tv?: TvStatus | null;
   members: string[];
   media?: MediaInfo;
+  /** Voice/music volume (Google speakers): remembered music level, at the voice volume now, that voice volume. */
+  music_volume?: number | null;
+  voice_mode?: boolean;
+  voice_volume?: number | null;
 }
 interface InputOption { id: string; label: string; kind: string; icon?: string | null; }
 interface TvStatus {
@@ -90,7 +94,8 @@ interface CalendarView {
   showing: string[]; screensaver_tvs: string[]; outdated: string[]; settings: CalSettings; saver_found: boolean;
 }
 interface BroadcastPrefs { volume: number; chime: boolean; voice?: string | null; targets: string[]; }
-interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; broadcast?: BroadcastPrefs; }
+interface VoiceVolume { enabled: boolean; voice: number; per_device: Record<string, number>; }
+interface Snapshot { devices: Device[]; groups: Group[]; schedules: Sched[]; settings: Settings; sync?: SyncView | null; calendar?: CalendarView; broadcast?: BroadcastPrefs; voice_volume?: VoiceVolume; }
 
 let state: Snapshot = { devices: [], groups: [], schedules: [], settings: { start_with_windows: false, auto_update: false } };
 let view = "devices";
@@ -1093,7 +1098,10 @@ function section(title: string, devices: Device[], stale: (d: Device) => boolean
 }
 
 function deviceCard(d: Device, stale: boolean): string {
-  const pct = Math.round(d.volume * 100);
+  // Google speakers with voice/music volume: the slider is the music volume.
+  const pct = Math.round((d.music_volume ?? d.volume) * 100);
+  const voiceTag = d.voice_mode && d.voice_volume != null
+    ? `<span class="voice-tag" title="Nothing's playing, so it's at its voice volume (what the Assistant answers at). The slider sets the music volume, used when music plays.">🗣 ${Math.round(d.voice_volume * 100)}%</span>` : "";
   const media = d.media
     ? `<div class="media-info">${d.media.state === "PLAYING" ? `<span class="playing">▶ Playing</span>` : d.media.state === "PAUSED" ? "⏸ Paused" : d.media.state}
        ${d.media.title ? " — " + esc(d.media.title) : ""}${d.media.artist ? " · " + esc(d.media.artist) : ""}${d.media.app ? ` <span class="via">${esc(d.media.app)}</span>` : ""}</div>`
@@ -1111,6 +1119,7 @@ function deviceCard(d: Device, stale: boolean): string {
       <button class="btn icon ${d.muted ? "muted-on" : ""}" data-act="mute" title="Mute">${d.muted ? "🔇" : "🔊"}</button>
       <input type="range" min="0" max="100" value="${pct}" data-act="vol" />
       <span class="vol-pct">${pct}%</span>
+      ${voiceTag}
       ${d.media?.supports_transport ? `
         <button class="btn icon" data-act="prev">⏮</button>
         <button class="btn icon" data-act="${d.media.state === "PLAYING" ? "pause" : "play"}">${d.media.state === "PLAYING" ? "⏸" : "▶"}</button>
@@ -1653,12 +1662,55 @@ async function renderLog() {
 
 // ---------------- settings view ----------------
 
+/** Voice (Assistant) volume vs music volume for Google speakers. */
+function voiceVolumeCard(): string {
+  const v = state.voice_volume ?? { enabled: true, voice: 0.4, per_device: {} };
+  const speakers = state.devices.filter((d) => d.voice_volume != null || v.per_device[d.id] != null);
+  const levels = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);
+  return `
+    <div class="card" id="voice-card">
+      <label class="chk"><input type="checkbox" id="vv-on" ${v.enabled ? "checked" : ""}> Separate voice and music volume on Google speakers</label>
+      <div class="vv-row ${v.enabled ? "" : "off"}">
+        <span>Voice volume (nothing playing)</span>
+        <input type="range" id="vv-voice" min="5" max="100" step="5" value="${Math.round(v.voice * 100)}"> <b id="vv-voice-pct">${Math.round(v.voice * 100)}%</b>
+      </div>
+      <div class="hint">When nothing plays, each Google speaker goes to its voice volume, so the Assistant always answers at that level. When music starts it goes back to its music volume, which remembers every change you make while music plays. The tray, schedules and sync groups set the music volume.</div>
+      ${v.enabled && speakers.length ? `
+      <details class="vv-custom" ${Object.keys(v.per_device).length ? "open" : ""}>
+        <summary>Different voice volume for some speakers</summary>
+        ${speakers.map((d) => `
+          <div class="vv-dev"><span>${esc(displayName(d))}</span>
+            <select data-vv-dev="${esc(d.id)}"><option value="">Same (${Math.round(v.voice * 100)}%)</option>
+              ${levels.map((l) => `<option value="${l}" ${Math.round((v.per_device[d.id] ?? -1) * 100) === l ? "selected" : ""}>${l}%</option>`).join("")}
+            </select></div>`).join("")}
+      </details>` : ""}
+    </div>`;
+}
+
+function wireVoiceVolumeCard() {
+  const v = state.voice_volume ?? { enabled: true, voice: 0.4, per_device: {} };
+  const save = (patch: Partial<VoiceVolume>) => {
+    const next = { ...v, ...patch };
+    invoke("set_voice_volume", { enabled: next.enabled, voice: next.voice, perDevice: next.per_device }).catch((e) => alert(String(e)));
+  };
+  document.getElementById("vv-on")?.addEventListener("change", (e) => save({ enabled: (e.target as HTMLInputElement).checked }));
+  const slider = document.getElementById("vv-voice") as HTMLInputElement | null;
+  slider?.addEventListener("input", () => { document.getElementById("vv-voice-pct")!.textContent = `${slider.value}%`; });
+  slider?.addEventListener("change", () => save({ voice: Number(slider.value) / 100 }));
+  document.querySelectorAll<HTMLSelectElement>("[data-vv-dev]").forEach((sel) => sel.addEventListener("change", () => {
+    const per = { ...v.per_device };
+    if (sel.value) per[sel.dataset.vvDev!] = Number(sel.value) / 100; else delete per[sel.dataset.vvDev!];
+    save({ per_device: per });
+  }));
+}
+
 function renderSettings() {
   content.innerHTML = `
     <h2>Settings</h2>
     <div class="card">
       <label class="chk"><input type="checkbox" id="set-autostart" ${state.settings.start_with_windows ? "checked" : ""} /> Start with Windows (minimized to tray)</label>
     </div>
+    ${voiceVolumeCard()}
     <div class="card">
       <label class="chk"><input type="checkbox" id="set-update" ${state.settings.auto_update ? "checked" : ""} /> Automatic updates (checks GitHub releases)</label>
       <div class="hint">Checks this project's GitHub releases on startup and offers to install newer versions.</div>
@@ -1705,6 +1757,7 @@ function renderSettings() {
     auto_update: (document.getElementById("set-update") as HTMLInputElement).checked,
   }});
   document.getElementById("set-autostart")!.addEventListener("change", push);
+  wireVoiceVolumeCard();
   document.getElementById("set-update")!.addEventListener("change", push);
   document.getElementById("cfg-export")!.addEventListener("click", async () => {
     const path = await save({ defaultPath: "volume-sync-config.json", filters: [{ name: "JSON", extensions: ["json"] }] });
@@ -1768,7 +1821,7 @@ function updateSlidersInPlace() {
     const slider = card.querySelector('[data-act="vol"]') as HTMLInputElement | null;
     const pctEl = card.querySelector(".vol-pct");
     if (slider && document.activeElement !== slider) {
-      const pct = Math.round(d.volume * 100);
+      const pct = Math.round((d.music_volume ?? d.volume) * 100);
       slider.value = String(pct);
       if (pctEl) pctEl.textContent = `${pct}%`;
     }

@@ -84,6 +84,14 @@ pub struct DeviceInfo {
     pub members: Vec<String>,
     #[serde(default)]
     pub media: Option<MediaInfo>,
+    /// Voice/music volume (Google speakers): the remembered music level,
+    /// whether it's at the voice volume now, and that voice volume.
+    #[serde(default)]
+    pub music_volume: Option<f32>,
+    #[serde(default)]
+    pub voice_mode: bool,
+    #[serde(default)]
+    pub voice_volume: Option<f32>,
 }
 
 /// Commands accepted by every backend actor.

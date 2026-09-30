@@ -211,20 +211,20 @@ async fn run(core: &Arc<Core>, req: Request, text: String) -> Result<Outcome, St
         for t in &targets {
             let e = &devs[t];
             if e.info.is_cast_group {
-                speakers.extend(e.info.members.iter().filter(|m| devs.contains_key(*m)).cloned());
+                speakers.extend(inner.members_of(t));
             } else {
                 speakers.insert(t.clone());
             }
         }
         // A speaker inside a targeted group hears it through the group.
         let cast_targets: Vec<String> = targets.iter()
-            .filter(|t| devs[*t].info.is_cast_group || !groups.iter().any(|g| devs[*g].info.members.contains(t)))
+            .filter(|t| devs[*t].info.is_cast_group || !groups.iter().any(|g| inner.members_of(g).contains(t)))
             .cloned().collect();
         // Sessions to pause: on the speakers themselves or on any group they're in.
         let mut owners: Vec<String> = Vec::new();
         for (id, e) in devs.iter() {
             let covers = speakers.contains(id) || cast_targets.contains(id)
-                || (e.info.is_cast_group && e.info.members.iter().any(|m| speakers.contains(m)));
+                || (e.info.is_cast_group && inner.members_of(id).iter().any(|m| speakers.contains(m)));
             let playing = e.info.media.as_ref().map(|m| matches!(m.state.as_str(), "PLAYING" | "BUFFERING")).unwrap_or(false);
             if covers && playing && e.info.backend == Backend::Cast {
                 owners.push(id.clone());

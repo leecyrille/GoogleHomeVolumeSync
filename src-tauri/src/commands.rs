@@ -439,6 +439,21 @@ pub fn stop_sync(core: CoreState) {
     core.emit_state();
 }
 
+/// Voice/music volume settings: on/off, the voice volume, and speakers with their own.
+#[tauri::command]
+pub fn set_voice_volume(core: CoreState<'_>, enabled: bool, voice: f32, per_device: std::collections::HashMap<String, f32>) {
+    info!(enabled, voice, custom = per_device.len(), "ui: voice volume settings");
+    {
+        let mut inner = core.inner.lock().unwrap();
+        let c = &mut inner.cfg.voice_volume;
+        c.enabled = enabled;
+        c.voice = voice.clamp(0.05, 1.0);
+        c.per_device = per_device.into_iter().map(|(k, v)| (k, v.clamp(0.05, 1.0))).collect();
+    }
+    core.save_config();
+    core.emit_state();
+}
+
 /// Speak a message on Google speakers: pause, broadcast volume, message, volume back, resume.
 #[tauri::command]
 pub async fn broadcast(core: CoreState<'_>, request: crate::broadcast::Request) -> Result<crate::broadcast::Outcome, String> {

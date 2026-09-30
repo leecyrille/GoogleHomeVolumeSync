@@ -6,6 +6,7 @@ mod core;
 mod media_server;
 mod calendar;
 mod broadcast;
+mod voice_music;
 mod cal_feeds;
 mod cal_render;
 mod cal_video;
@@ -82,6 +83,7 @@ pub fn run() {
             commands::list_media_files,
             commands::broadcast,
             commands::broadcast_voices,
+            commands::set_voice_volume,
             commands::calendar_show,
             commands::calendar_stop,
             commands::calendar_screensaver,
@@ -147,6 +149,8 @@ pub fn run() {
 
             // The calendar on TVs: who shows it, and the pictures themselves.
             tauri::async_runtime::spawn(calendar::run(core.clone()));
+            // Voice volume while idle, music volume while playing (Google speakers).
+            tauri::async_runtime::spawn(voice_music::run(core.clone()));
             tauri::async_runtime::spawn(cal_render::run(app.handle().clone(), core.clone()));
 
             // Reconnect actors for devices we knew about (cast devices before mdns finds them again).

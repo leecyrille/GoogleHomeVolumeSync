@@ -60,6 +60,32 @@ pub struct AppConfig {
     /// Spoken messages to Google speakers.
     #[serde(default)]
     pub broadcast: BroadcastConfig,
+    /// Separate voice (Assistant) and music volumes for Google speakers.
+    #[serde(default)]
+    pub voice_volume: VoiceVolumeConfig,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VoiceVolumeConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Volume while nothing plays (what the Assistant answers at), 0..1.
+    #[serde(default = "default_voice")]
+    pub voice: f32,
+    /// Speakers with their own voice volume.
+    #[serde(default)]
+    pub per_device: HashMap<String, f32>,
+    /// Remembered music volume per speaker.
+    #[serde(default)]
+    pub music: HashMap<String, f32>,
+}
+fn default_voice() -> f32 {
+    0.4
+}
+impl Default for VoiceVolumeConfig {
+    fn default() -> Self {
+        VoiceVolumeConfig { enabled: true, voice: default_voice(), per_device: HashMap::new(), music: HashMap::new() }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

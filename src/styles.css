@@ -470,3 +470,12 @@ button.btn.mini { padding: 2px 9px; font-size: 11px; text-transform: none; lette
 .bc-vol input { width: 160px; }
 .bc-result { font-size: 13px; min-height: 1em; }
 .bc-result:empty { display: none; }
+
+/* ---- voice / music volume ---- */
+.voice-tag { font-size: 11.5px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; white-space: nowrap; }
+.vv-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px 24px; font-size: 13px; }
+.vv-row.off { opacity: .45; }
+.vv-row input { width: 200px; }
+.vv-custom { margin: 10px 0 0 24px; font-size: 13px; }
+.vv-custom summary { cursor: pointer; color: var(--text-dim); }
+.vv-dev { display: flex; align-items: center; justify-content: space-between; max-width: 420px; padding: 4px 0; }

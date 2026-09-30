@@ -21,6 +21,16 @@ pub struct Entry {
     pub group_members: Vec<String>,
 }
 
+impl CoreInner {
+    /// A cast group's member speakers, as device ids.
+    pub fn members_of(&self, group_id: &str) -> Vec<String> {
+        let Some(g) = self.devices.get(group_id) else { return Vec::new() };
+        self.devices.keys()
+            .filter(|id| g.group_members.contains(&id.to_lowercase().replace('-', "")))
+            .cloned().collect()
+    }
+}
+
 pub struct CoreInner {
     pub cfg: AppConfig,
     pub devices: HashMap<String, Entry>,
@@ -61,6 +71,14 @@ pub struct Snapshot {
     pub sync: Option<SyncView>,
     pub calendar: crate::calendar::CalendarView,
     pub broadcast: crate::config::BroadcastConfig,
+    pub voice_volume: VoiceView,
+}
+
+#[derive(Serialize, Clone)]
+pub struct VoiceView {
+    pub enabled: bool,
+    pub voice: f32,
+    pub per_device: HashMap<String, f32>,
 }
 
 #[derive(Serialize, Clone)]
@@ -121,6 +139,11 @@ impl Core {
                     info.media = Some(via.clone());
                 }
             }
+            if crate::voice_music::enabled(&inner) && crate::voice_music::eligible(&inner, &info.id) {
+                info.music_volume = Some(inner.cfg.voice_volume.music.get(&info.id).copied().unwrap_or(info.volume));
+                info.voice_mode = crate::voice_music::mode(&info.id) == Some(crate::voice_music::Mode::Voice);
+                info.voice_volume = Some(crate::voice_music::voice_level(&inner, &info.id));
+            }
             info
         }).collect();
         devices.sort_by(|a, b| {
@@ -135,6 +158,11 @@ impl Core {
             settings: inner.cfg.settings.clone(),
             calendar: crate::calendar::view(&inner.cfg.calendar),
             broadcast: inner.cfg.broadcast.clone(),
+            voice_volume: VoiceView {
+                enabled: inner.cfg.voice_volume.enabled,
+                voice: inner.cfg.voice_volume.voice,
+                per_device: inner.cfg.voice_volume.per_device.clone(),
+            },
             sync: inner.sync.as_ref().map(|s| SyncView {
                 members: s.members.clone(),
                 paused: s.paused,
@@ -183,6 +211,9 @@ impl Core {
                         tv: None,
                         members: Vec::new(),
                         media: None,
+                        music_volume: None,
+                        voice_mode: false,
+                        voice_volume: None,
                     },
                     cmd: None,
                     group_members: Vec::new(),
@@ -263,6 +294,9 @@ impl Core {
                     tv: None,
                     members: Vec::new(),
                     media: None,
+                    music_volume: None,
+                    voice_mode: false,
+                    voice_volume: None,
                 },
                 cmd: None,
                 group_members: Vec::new(),
@@ -364,6 +398,25 @@ impl Core {
         self.send_cmd(id, DeviceCmd::SetVolume(level));
     }
 
+    /// Set a speaker's music volume: straight away when music plays (or the speaker isn't
+    /// managed by voice/music volume), otherwise only remembered for when music starts.
+    pub fn set_music_volume(&self, id: &str, level: f32) {
+        let remember_only = {
+            let mut inner = self.inner.lock().unwrap();
+            let managed = crate::voice_music::enabled(&inner) && crate::voice_music::eligible(&inner, id);
+            if managed {
+                inner.cfg.voice_volume.music.insert(id.to_string(), level.clamp(0.0, 1.0));
+                inner.cfg_dirty = true;
+            }
+            managed && crate::voice_music::mode(id) == Some(crate::voice_music::Mode::Voice)
+        };
+        if remember_only {
+            info!(id=%id, level, "core: music volume remembered (speaker is idle)");
+        } else {
+            self.set_device_volume(id, level, true);
+        }
+    }
+
     fn gain_of(inner: &CoreInner, id: &str) -> f32 {
         inner.devices.get(id).map(|e| e.info.sync_gain).unwrap_or(1.0)
     }
@@ -382,7 +435,7 @@ impl Core {
         };
         info!(group=%group_id, level, targets=?targets, "core: set group volume");
         for (m, v) in targets {
-            self.set_device_volume(&m, v, true);
+            self.set_music_volume(&m, v);
         }
         self.emit_state();
     }
@@ -455,9 +508,9 @@ impl Core {
             }
             peers
         };
-        self.set_device_volume(id, level, true);
+        self.set_music_volume(id, level);
         for (p, v) in peers {
-            self.set_device_volume(&p, v, true);
+            self.set_music_volume(&p, v);
         }
         self.emit_state();
     }
@@ -613,9 +666,17 @@ impl Core {
                         let is_echo = inner.pending.get(&id)
                             .map(|(exp, at)| (exp - volume).abs() <= 0.03 && at.elapsed() < Duration::from_secs(30))
                             .unwrap_or(false);
+                        let idle_speaker = crate::voice_music::voice_mode_now(&inner, &id);
+                        let music_speaker = crate::voice_music::enabled(&inner) && crate::voice_music::eligible(&inner, &id) && !idle_speaker;
                         if is_echo {
                             inner.pending.remove(&id);
+                        } else if idle_speaker && !inner.hold_sync.contains(&id) {
+                            // Changed while nothing plays: maybe for the next song (voice_music decides).
+                            crate::voice_music::note_idle_change(&id, volume);
                         } else if changed && old.is_some() && !inner.hold_sync.contains(&id) {
+                            if music_speaker {
+                                inner.cfg.voice_volume.music.insert(id.clone(), volume);
+                            }
                             // External change: propagate to sync groups.
                             // Logical volume = actual / source gain; each peer
                             // gets logical x its own gain.
@@ -643,7 +704,7 @@ impl Core {
                     }
                 }
                 for (m, v) in sync_targets {
-                    self.set_device_volume(&m, v, true);
+                    self.set_music_volume(&m, v);
                 }
                 self.emit_state();
             }
@@ -674,7 +735,7 @@ impl Core {
                     self.set_group_volume(&t.target_id, level);
                 } else {
                     info!(device=%t.target_id, level, "scheduler: set device volume");
-                    self.set_device_volume(&t.target_id, level, true);
+                    self.set_music_volume(&t.target_id, level);
                 }
             }
         }
