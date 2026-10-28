@@ -1,7 +1,7 @@
-"""Generate THIRD-PARTY-NOTICES.txt for everything shipped in the Windows build.
+"""Generate THIRD-PARTY-NOTICES.txt for everything shipped in the Windows and Linux builds.
 
 Rust crates come from `cargo metadata` (normal dependencies reachable from the
-app on x86_64-pc-windows-msvc); JavaScript packages are the runtime
+app on any of PLATFORMS); JavaScript packages are the runtime
 dependencies in package.json. License files are copied from each package's
 own directory; identical texts are printed once and listed against every
 package that uses them.
@@ -15,6 +15,7 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "THIRD-PARTY-NOTICES.txt"
+PLATFORMS = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 LICENSE_FILE = re.compile(r"^(LICEN[CS]E|COPYING|NOTICE|UNLICENSE)([-_.].*)?$", re.IGNORECASE)
 
 EXTRA = """\
@@ -176,23 +177,26 @@ def license_texts(pkg_dir: pathlib.Path) -> list[tuple[str, str]]:
 
 
 def rust_packages() -> list[dict]:
-    meta = json.loads(subprocess.check_output(
-        ["cargo", "metadata", "--format-version", "1", "--filter-platform", "x86_64-pc-windows-msvc"],
-        cwd=ROOT / "src-tauri",
-    ))
-    pkgs = {p["id"]: p for p in meta["packages"]}
-    nodes = {n["id"]: n for n in meta["resolve"]["nodes"]}
-    root = meta["resolve"]["root"]
-    seen, stack = set(), [root]
-    while stack:
-        nid = stack.pop()
-        if nid in seen:
-            continue
-        seen.add(nid)
-        for dep in nodes[nid]["deps"]:
-            if any(k["kind"] is None for k in dep["dep_kinds"]):
-                stack.append(dep["pkg"])
-    seen.discard(root)
+    pkgs, seen = {}, set()
+    for platform in PLATFORMS:
+        meta = json.loads(subprocess.check_output(
+            ["cargo", "metadata", "--format-version", "1", "--filter-platform", platform],
+            cwd=ROOT / "src-tauri",
+        ))
+        pkgs.update({p["id"]: p for p in meta["packages"]})
+        nodes = {n["id"]: n for n in meta["resolve"]["nodes"]}
+        root = meta["resolve"]["root"]
+        reached, stack = set(), [root]
+        while stack:
+            nid = stack.pop()
+            if nid in reached:
+                continue
+            reached.add(nid)
+            for dep in nodes[nid]["deps"]:
+                if any(k["kind"] is None for k in dep["dep_kinds"]):
+                    stack.append(dep["pkg"])
+        reached.discard(root)
+        seen |= reached
     out = []
     for pid in seen:
         p = pkgs[pid]

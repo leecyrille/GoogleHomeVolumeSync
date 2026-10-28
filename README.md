@@ -97,7 +97,7 @@ This app stands on a lot of open-source work. The main pieces:
 - Roku control follows Roku's published [External Control Protocol](https://developer.roku.com/docs/developer-program/dev-tools/external-control-api.md) documentation
 - Casting files and links, queues and subtitles were inspired by [Web Video Caster](https://www.webvideocaster.com/). Volume Sync isn't affiliated with it and uses none of its code.
 
-Every component shipped in the app, about 360 in total, is listed with its full license text in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). The app also shows it under **Settings → View all licenses**. Regenerate it with `python tools/gen_notices.py` after changing dependencies.
+Every component shipped in the Windows and Linux builds, about 470 in total, is listed with its full license text in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). The app also shows it under **Settings → View all licenses**. Regenerate it with `python tools/gen_notices.py` after changing dependencies.
 
 ## Development
 
