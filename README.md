@@ -1,8 +1,8 @@
 # Unofficial Google Home Volume Sync
 
-**Website: [googlehomevolumesync.com](https://googlehomevolumesync.com)** &nbsp;&middot;&nbsp; **[Download for Windows](https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe)** &nbsp;&middot;&nbsp; **[&#9749; Buy me a coffee](https://pactotech.com/products/google-home-volume-sync-tip-jar)**
+**Website: [googlehomevolumesync.com](https://googlehomevolumesync.com)** &nbsp;&middot;&nbsp; **[Download for Windows](https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe)** &nbsp;&middot;&nbsp; **[Download for Linux (.deb)](https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-linux-amd64.deb)** &nbsp;&middot;&nbsp; **[&#9749; Buy me a coffee](https://pactotech.com/products/google-home-volume-sync-tip-jar)**
 
-A Windows desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control, puts your family calendar on your TVs, casts your own files, and broadcasts spoken messages. Fully local, no cloud APIs.
+A Windows and Linux desktop app (Tauri 2, pure Rust backend) that discovers Google Cast devices on your LAN and gives you per-device and per-group volume control, puts your family calendar on your TVs, casts your own files, and broadcasts spoken messages. Fully local, no cloud APIs.
 
 ## Screenshots
 
@@ -59,7 +59,7 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 - **Cast media**: play video or music files from your PC, or a link, on any Google Cast device (video on Nest Hubs and Chromecasts, music on speakers and groups), with queues, subtitles from a matching .srt/.vtt, and a draggable progress bar. Show pictures on Nest Hubs, Chromecasts and Roku TVs; several become a slideshow. Roku TVs can do the same after a one-time developer-mode setup that installs a small player channel. **Play Video or Pictures** and **Play Audio** let you tick several devices at once (Roku TVs, Google screens, speakers and speaker groups are listed separately) and play in sync; the app warns when a mix, like a Roku TV with Google speakers, can't stay exactly in step and offers to drop the odd ones out. Files are served only to the devices you pick, for 12 hours.
 - **Synced playback**: play one video or music file on several Google Cast devices and Roku TVs at once. Pausing, resuming or skipping on any one of them is copied to the others, and a device that drifts ahead is paused for exactly its lead so they line up again.
 - **Calendar on TV**: a family wall calendar (the [PactoTech Calendar Saver](https://calendarsaver.com/) design, built in) on Roku TVs, Nest Hubs and Chromecasts: your Google/Outlook/iCloud calendars (secret iCal links), a photo collage from your folders and a big clock. Month, week and day views (Up/Down on a Roku remote switches them, or they rotate on a timer), light or dark, and a text size per screen so a 5" display is as readable as a 55" TV. Real 4K on Roku TVs. Use it as a Roku screensaver, show it from each TV's card or the tray menu, or schedule it (e.g. weekdays 7:00 for 1½ hours in light mode): it can turn the TV on, wait for a show to finish, and turn the TV off afterwards or when nobody touches the remote. Your calendars are copied from the Calendar Saver if you have it. The calendar is redrawn on this PC every minute, so the PC needs to be on.
-- **Broadcast**: type a message and it's spoken (a Windows voice, after a chime) on the Google speakers and groups you pick: whatever's playing pauses, the message plays at your broadcast volume, then every volume goes back and anything this app was playing carries on. Spotify and other apps close on those speakers during the message, and the app tells you where to press play again.
+- **Broadcast**: type a message and it's spoken (a Windows voice, or on Linux a Piper or eSpeak NG voice, after a chime) on the Google speakers and groups you pick: whatever's playing pauses, the message plays at your broadcast volume, then every volume goes back and anything this app was playing carries on. Spotify and other apps close on those speakers during the message, and the app tells you where to press play again.
 - **Play queue**: pick several files or a whole folder, drag them into order, and see or change the queue on the device's card.
 - **Scheduler**: weekly events (day-of-week checkboxes + time) that set volumes on devices or groups; each event has an enable checkbox.
 - **System tray**: right-click to see what's playing and control it, and set a sync group's volume in 5% steps (straight in the first menu when you have one sync group). Open App / Exit. Close button hides to tray.
@@ -67,7 +67,7 @@ Weekly schedules quiet the house on your terms, and settings keep it starting wi
 - **Last seen** shown for devices offline >1 day, with a delete option (they re-add when seen again).
 - **Config export/import** (JSON).
 - **Full logging** of discoveries, observed changes and sent commands — always with cast UUIDs, IPs and names — to `%APPDATA%\GoogleHomeVolumeSync\logs\`.
-- **Start with Windows** (login autostart, starts hidden in tray).
+- **Start with Windows** / **Start when I log in** on Linux (login autostart, starts hidden in tray).
 - **Optional auto-updates** from GitHub releases.
 
 ### Additional device backends
@@ -106,7 +106,11 @@ npm install
 npm run tauri dev
 ```
 
-Requires Rust (MSVC toolchain) and Node.
+Requires Rust (MSVC toolchain on Windows) and Node. On Linux (Ubuntu 24.04+) also:
+
+```
+sudo apt install build-essential libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev ffmpeg espeak-ng
+```
 
 ## Building the installer
 
@@ -116,9 +120,17 @@ npm run tauri build
 
 Produces an NSIS `.exe` installer under `src-tauri/target/release/bundle/nsis/` (per-user install, no admin needed).
 
+On Linux, `npm run tauri build -- --bundles deb,appimage` produces a `.deb` (pulls in `ffmpeg` and `espeak-ng`) and an AppImage under `src-tauri/target/release/bundle/`.
+
+### Linux notes
+
+- **Calendar on TV**: the calendar is drawn in an off-screen GTK window (WebKitGTK snapshot) and the 4K videos are encoded with `ffmpeg` (libx264), where Windows uses WebView2 and Media Foundation.
+- **Broadcast voices**: [Piper](https://github.com/OHF-Voice/piper1-gpl) voices sound natural. Install Piper with `pipx install piper-tts` and put voices (`<name>.onnx` plus `<name>.onnx.json`, from [piper-voices](https://huggingface.co/rhasspy/piper-voices)) in `~/.config/GoogleHomeVolumeSync/voices/`. Without them, eSpeak NG is used.
+- **Tray icon** on GNOME needs the AppIndicator extension (on by default in Ubuntu).
+
 Update signing: the updater public key is in `tauri.conf.json`; the private key lives outside the repo (`~/.tauri/ghvs.key`). Release artifacts for auto-update are published to a public releases repo as `latest.json` + signed installers.
 
 ## Config & logs
 
-- Config: `%APPDATA%\GoogleHomeVolumeSync\config.json`
-- Logs: `%APPDATA%\GoogleHomeVolumeSync\logs\volume-sync.log.*` (daily rolling)
+- Config: `%APPDATA%\GoogleHomeVolumeSync\config.json` (Linux: `~/.config/GoogleHomeVolumeSync/config.json`)
+- Logs: `%APPDATA%\GoogleHomeVolumeSync\logs\volume-sync.log.*` (Linux: `~/.config/GoogleHomeVolumeSync/logs/`), daily rolling

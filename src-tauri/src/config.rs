@@ -95,7 +95,7 @@ pub struct BroadcastConfig {
     pub volume: f32,
     #[serde(default = "default_true")]
     pub chime: bool,
-    /// A Windows voice by name (None = the default voice).
+    /// A voice by name, as broadcast::voices lists them (None = the default voice).
     #[serde(default)]
     pub voice: Option<String>,
     /// The speakers picked last time.

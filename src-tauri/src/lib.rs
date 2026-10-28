@@ -9,6 +9,10 @@ mod broadcast;
 mod voice_music;
 mod cal_feeds;
 mod cal_render;
+#[cfg(windows)]
+mod cal_video;
+#[cfg(not(windows))]
+#[path = "cal_video_ffmpeg.rs"]
 mod cal_video;
 mod sync_play;
 mod tray;

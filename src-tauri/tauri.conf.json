@@ -42,6 +42,17 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "ffmpeg",
+          "espeak-ng"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
     }
   },
   "plugins": {

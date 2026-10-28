@@ -39,9 +39,18 @@ zip = { version = "4", default-features = false }
 md5 = "0.7"
 chrono-tz = "0.10"
 sha2 = "0.10"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
+# Calendar capture (WebView2), broadcast voices (SpeechSynthesis) and 4K video (Media Foundation).
+[target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Foundation", "Foundation_Collections", "Media_Core", "Media_SpeechSynthesis", "Storage_Streams"] }
+
+# Calendar capture: the same GTK / WebKitGTK crates Tauri uses on Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
+cairo-rs = { version = "0.18", features = ["png"] }
 
 [profile.release]
 codegen-units = 1

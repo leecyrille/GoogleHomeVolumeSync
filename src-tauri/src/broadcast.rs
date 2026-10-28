@@ -1,7 +1,7 @@
 //! Broadcast a spoken message to Google speakers and displays.
 //!
 //! Pause what's playing, set the broadcast volume, play the message (a Windows
-//! voice, after a short chime), then put every volume back and resume. Media
+//! voice, or Piper / eSpeak NG on Linux, after a short chime), then put every volume back and resume. Media
 //! this app cast is loaded again at the same spot; other apps (Spotify, ...)
 //! are closed by the message on those speakers, so the caller is told to press
 //! play there.
@@ -51,6 +51,7 @@ fn unix_ms() -> i64 {
 }
 
 /// The voices Windows can speak with.
+#[cfg(windows)]
 pub fn voices() -> Vec<String> {
     use windows::Media::SpeechSynthesis::SpeechSynthesizer;
     let list = || -> windows::core::Result<Vec<String>> {
@@ -64,6 +65,7 @@ pub fn voices() -> Vec<String> {
 }
 
 /// Speak `text` into WAV bytes with a Windows voice.
+#[cfg(windows)]
 fn speak(text: &str, voice: Option<&str>) -> Result<Vec<u8>, String> {
     use windows::core::HSTRING;
     use windows::Media::SpeechSynthesis::SpeechSynthesizer;
@@ -90,6 +92,108 @@ fn speak(text: &str, voice: Option<&str>) -> Result<Vec<u8>, String> {
         Ok(buf)
     };
     run().map_err(|e| format!("Windows couldn't speak the message: {e}"))
+}
+
+/// Linux: Piper voices (`<name>.onnx` + `<name>.onnx.json` in the config folder's `voices`,
+/// natural sounding), then eSpeak NG's English voices (robotic, always there once installed).
+#[cfg(not(windows))]
+mod tts {
+    use std::path::PathBuf;
+    use std::process::{Command, Stdio};
+
+    const ESPEAK: &[(&str, &str)] = &[
+        ("eSpeak: English (America)", "en-us"),
+        ("eSpeak: English (Britain)", "en-gb"),
+        ("eSpeak: English (Scotland)", "en-gb-scotland"),
+    ];
+
+    fn voices_dir() -> PathBuf {
+        crate::config::config_dir().join("voices")
+    }
+
+    fn piper_bin() -> Option<PathBuf> {
+        let home = dirs::home_dir().map(|h| h.join(".local/bin/piper"));
+        let on_path = std::env::var_os("PATH").into_iter().flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>()).map(|d| d.join("piper"));
+        home.into_iter().chain(on_path).find(|p| p.is_file())
+    }
+
+    /// (display name, model file), sorted by name.
+    fn piper_voices() -> Vec<(String, PathBuf)> {
+        let Ok(entries) = std::fs::read_dir(voices_dir()) else { return Vec::new() };
+        let mut out: Vec<(String, PathBuf)> = entries.flatten().map(|e| e.path())
+            .filter(|p| p.extension().map(|x| x == "onnx").unwrap_or(false) && p.with_extension("onnx.json").is_file())
+            .filter_map(|p| {
+                // en_US-lessac-medium -> "Piper: lessac (en_US, medium)"
+                let stem = p.file_stem()?.to_string_lossy().into_owned();
+                let parts: Vec<&str> = stem.split('-').collect();
+                let name = match parts.as_slice() {
+                    [lang, speaker, quality] => format!("Piper: {speaker} ({lang}, {quality})"),
+                    _ => format!("Piper: {stem}"),
+                };
+                Some((name, p))
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    pub fn voices() -> Vec<String> {
+        let mut out: Vec<String> = if piper_bin().is_some() { piper_voices().into_iter().map(|v| v.0).collect() } else { Vec::new() };
+        out.extend(ESPEAK.iter().map(|v| v.0.to_string()));
+        out
+    }
+
+    /// Runs `cmd` with `text` on stdin; it writes a WAV to `wav`.
+    fn run(mut cmd: Command, text: &str, wav: &std::path::Path, what: &str) -> Result<Vec<u8>, String> {
+        use std::io::Write;
+        let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()
+            .map_err(|e| format!("Couldn't start {what}: {e}"))?;
+        child.stdin.take().map(|mut i| i.write_all(text.as_bytes()));
+        let out = child.wait_with_output().map_err(|e| format!("{what} failed: {e}"))?;
+        let bytes = std::fs::read(wav);
+        let _ = std::fs::remove_file(wav);
+        match bytes {
+            Ok(b) if out.status.success() && !b.is_empty() => Ok(b),
+            _ => Err(format!("{what} couldn't speak the message: {}", String::from_utf8_lossy(&out.stderr).trim())),
+        }
+    }
+
+    pub fn speak(text: &str, voice: Option<&str>) -> Result<Vec<u8>, String> {
+        let dir = crate::config::config_dir().join("broadcast");
+        let _ = std::fs::create_dir_all(&dir);
+        let wav = dir.join(format!("tts-{}.wav", uuid::Uuid::new_v4().simple()));
+        // The chosen voice; an eSpeak voice; else (none chosen, or one from another
+        // computer, like a Windows voice) the first Piper voice, then eSpeak.
+        let espeak_chosen = ESPEAK.iter().any(|v| Some(v.0) == voice);
+        let piper = piper_bin().filter(|_| !espeak_chosen).and_then(|bin| {
+            let voices = piper_voices();
+            let pick = voices.iter().find(|x| Some(x.0.as_str()) == voice).cloned().or_else(|| voices.into_iter().next());
+            pick.map(|(_, model)| (bin, model))
+        });
+        if let Some((bin, model)) = piper {
+            let mut cmd = Command::new(bin);
+            cmd.arg("--model").arg(&model).arg("--output_file").arg(&wav);
+            match run(cmd, text, &wav, "Piper") {
+                Ok(b) => return Ok(b),
+                Err(e) => tracing::warn!(error = %e, "broadcast: piper failed, using espeak-ng"),
+            }
+        }
+        let code = ESPEAK.iter().find(|v| Some(v.0) == voice).map(|v| v.1).unwrap_or("en-us");
+        let mut cmd = Command::new("espeak-ng");
+        cmd.args(["-v", code, "-s", "160", "--stdin", "-w"]).arg(&wav);
+        run(cmd, text, &wav, "eSpeak NG")
+    }
+}
+
+/// The voices this computer can speak with.
+#[cfg(not(windows))]
+pub fn voices() -> Vec<String> {
+    tts::voices()
+}
+
+#[cfg(not(windows))]
+fn speak(text: &str, voice: Option<&str>) -> Result<Vec<u8>, String> {
+    tts::speak(text, voice)
 }
 
 /// Put a two-tone chime and a little silence in front of 16-bit PCM WAV speech.

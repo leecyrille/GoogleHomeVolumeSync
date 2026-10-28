@@ -4,6 +4,9 @@ import { save, open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 const DONATE_URL = "https://pactotech.com/products/google-home-volume-sync-tip-jar";
+const IS_WINDOWS = navigator.userAgent.includes("Windows");
+/** Where the webview reaches the app's calphoto protocol (Tauri uses http://<scheme>.localhost on Windows only). */
+const CALPHOTO = IS_WINDOWS ? "http://calphoto.localhost" : "calphoto://localhost";
 const SITE_URL = "https://googlehomevolumesync.com";
 const REPO_URL = "https://github.com/leecyrille/GoogleHomeVolumeSync";
 
@@ -674,7 +677,7 @@ async function openBroadcast() {
       <div class="bc-opts">
         <label class="bc-vol">Volume <input type="range" id="bc-volume" min="5" max="100" step="5" value="${Math.round(prefs.volume * 100)}"> <b id="bc-volume-pct">${Math.round(prefs.volume * 100)}%</b></label>
         <label class="chk"><input type="checkbox" id="bc-chime" ${prefs.chime ? "checked" : ""}> Chime first</label>
-        ${voices.length ? `<label>Voice <select id="bc-voice"><option value="">Windows default</option>${voices.map((v) => `<option ${v === prefs.voice ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : ""}
+        ${voices.length ? `<label>Voice <select id="bc-voice"><option value="">${IS_WINDOWS ? "Windows default" : "Default"}</option>${voices.map((v) => `<option ${v === prefs.voice ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : ""}
       </div>
       <div class="hint">Whatever's playing is paused, the message plays at this volume, then each speaker's volume goes back and anything this app was playing carries on. Spotify and other apps close on those speakers during the message: press play again there.</div>
       <div class="bc-result" id="bc-result"></div>
@@ -814,7 +817,7 @@ function renderCalendar() {
         <div class="lbl">Shows</div><div class="row wrap">${viewChecks("disp-views", ds.views)} <span class="lbl">switch</span> ${selectOf('data-disp-f="rotate_secs"', ds.rotate_secs, ROTATE_CHOICES)}</div>
         ${cal.updated ? `<div></div><div class="cal-previews small">${ds.views.map((v) => `
           <figure data-cal-preview="${vname}|${v}" title="Open the ${VIEW_NAMES[v]?.toLowerCase()} view">
-            <img src="http://calphoto.localhost/preview/calendar-${vname}-${v}.jpg?v=${cal.updated}" alt="" onerror="this.closest('figure').classList.add('missing')">
+            <img src="${CALPHOTO}/preview/calendar-${vname}-${v}.jpg?v=${cal.updated}" alt="" onerror="this.closest('figure').classList.add('missing')">
             <figcaption>${VIEW_NAMES[v]}</figcaption>
           </figure>`).join("")}</div>` : ""}
       </div>` : "";
@@ -1708,7 +1711,7 @@ function renderSettings() {
   content.innerHTML = `
     <h2>Settings</h2>
     <div class="card">
-      <label class="chk"><input type="checkbox" id="set-autostart" ${state.settings.start_with_windows ? "checked" : ""} /> Start with Windows (minimized to tray)</label>
+      <label class="chk"><input type="checkbox" id="set-autostart" ${state.settings.start_with_windows ? "checked" : ""} /> ${IS_WINDOWS ? "Start with Windows" : "Start when I log in"} (minimized to tray)</label>
     </div>
     ${voiceVolumeCard()}
     <div class="card">

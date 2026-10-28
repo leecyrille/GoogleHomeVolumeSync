@@ -471,7 +471,7 @@ pub async fn broadcast(core: CoreState<'_>, request: crate::broadcast::Request) 
     crate::broadcast::broadcast(&core_arc, request).await
 }
 
-/// The Windows voices a message can be spoken with.
+/// The voices a message can be spoken with (Windows voices; Piper / eSpeak NG on Linux).
 #[tauri::command]
 pub async fn broadcast_voices() -> Vec<String> {
     tokio::task::spawn_blocking(crate::broadcast::voices).await.unwrap_or_default()

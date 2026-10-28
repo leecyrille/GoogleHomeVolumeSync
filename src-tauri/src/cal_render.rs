@@ -19,6 +19,11 @@ const LABEL: &str = "calendar-tv";
 /// Each 4K video shows its picture this long (1 frame a second: Roku players stall on a single-frame file); a new one replaces it every minute.
 const VIDEO_SECS: u32 = 75;
 const PHOTO_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+/// Where the webviews reach the calphoto protocol.
+#[cfg(windows)]
+const PHOTO_BASE: &str = "http://calphoto.localhost";
+#[cfg(not(windows))]
+const PHOTO_BASE: &str = "calphoto://localhost";
 
 pub fn dir() -> PathBuf {
     let d = crate::config::config_dir().join("calendar");
@@ -193,7 +198,7 @@ fn scan_photos(folders: &[String]) -> Vec<String> {
                 } else if p.extension().and_then(|x| x.to_str()).map(|x| PHOTO_EXTS.contains(&x.to_ascii_lowercase().as_str())).unwrap_or(false) {
                     if let Ok(rel) = p.strip_prefix(root) {
                         let parts: Vec<String> = rel.components().map(|c| encode(&c.as_os_str().to_string_lossy())).collect();
-                        out.push(format!("http://calphoto.localhost/p/{i}/{}", parts.join("/")));
+                        out.push(format!("{PHOTO_BASE}/p/{i}/{}", parts.join("/")));
                     }
                 }
             }
@@ -239,7 +244,8 @@ pub fn protocol(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>, 
         let folders = app.state::<Arc<Core>>().inner.lock().unwrap().cfg.calendar.photo_folders.clone();
         idx.parse::<usize>().ok().and_then(|i| folders.get(i).cloned()).and_then(|root| {
             let root = std::fs::canonicalize(root).ok()?;
-            let full = std::fs::canonicalize(root.join(rel.replace('/', "\\"))).ok()?;
+            let rel = if cfg!(windows) { rel.replace('/', "\\") } else { rel.to_string() };
+            let full = std::fs::canonicalize(root.join(rel)).ok()?;
             full.starts_with(&root).then_some(full)
         })
     } else if let Some(name) = path.strip_prefix("/preview/") {
@@ -270,32 +276,42 @@ async fn ensure_window(app: &tauri::AppHandle, four_k: bool) -> Result<tauri::We
         let _ = w.destroy();
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-    // Past the right edge of every monitor: it renders, but nobody sees it.
-    let right = app.available_monitors().ok().unwrap_or_default().iter()
-        .map(|m| m.position().x + m.size().width as i32).max().unwrap_or(1920);
     let (w, h) = if four_k { (3840u32, 2160u32) } else { (1920, 1080) };
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("calendar/index.html".into()))
+    let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("calendar/index.html".into()))
         .title("Calendar (for TVs)")
         .decorations(false)
         .resizable(false)
         .skip_taskbar(true)
         .focused(false)
-        .visible(true)
         .shadow(false)
         .inner_size(w as f64, h as f64)
-        .position((right + 400) as f64, 0.0)
         .initialization_script("window.__TV__ = true;")
+        .data_directory(crate::config::config_dir().join("calendar-webview"));
+    // Past the right edge of every monitor: it renders, but nobody sees it.
+    #[cfg(windows)]
+    let right = app.available_monitors().ok().unwrap_or_default().iter()
+        .map(|m| m.position().x + m.size().width as i32).max().unwrap_or(1920);
+    #[cfg(windows)]
+    let builder = builder
+        .visible(true)
+        .position((right + 400) as f64, 0.0)
         // Off-screen windows count as hidden to Chromium, which would stop painting them.
-        .additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows --disable-renderer-backgrounding")
-        .data_directory(crate::config::config_dir().join("calendar-webview"))
-        .build()
-        .map_err(|e| format!("Couldn't open the calendar drawing window: {e}"))?;
-    let _ = window.set_size(tauri::PhysicalSize::new(w, h));
-    let _ = window.set_position(tauri::PhysicalPosition::new(right + 400, 0));
-    hide_from_alt_tab(&window);
-    // One CSS pixel per 1080p pixel, whatever the display scaling: 4K draws the same page at double detail.
-    let scale = window.scale_factor().unwrap_or(1.0);
-    let _ = window.set_zoom((if four_k { 2.0 } else { 1.0 }) / scale);
+        .additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows --disable-renderer-backgrounding");
+    // Never shown: its webview moves into a GTK off-screen window (offscreen::attach).
+    #[cfg(not(windows))]
+    let builder = builder.visible(false);
+    let window = builder.build().map_err(|e| format!("Couldn't open the calendar drawing window: {e}"))?;
+    #[cfg(windows)]
+    {
+        let _ = window.set_size(tauri::PhysicalSize::new(w, h));
+        let _ = window.set_position(tauri::PhysicalPosition::new(right + 400, 0));
+        hide_from_alt_tab(&window);
+        // One CSS pixel per 1080p pixel, whatever the display scaling: 4K draws the same page at double detail.
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let _ = window.set_zoom((if four_k { 2.0 } else { 1.0 }) / scale);
+    }
+    #[cfg(target_os = "linux")]
+    offscreen::attach(&window, w, h, four_k).await?;
     st().window_4k = Some(four_k);
     info!(four_k, "calendar: drawing window opened");
     // Page, fonts and first photos.
@@ -303,6 +319,7 @@ async fn ensure_window(app: &tauri::AppHandle, four_k: bool) -> Result<tauri::We
     Ok(window)
 }
 
+#[cfg(windows)]
 fn hide_from_alt_tab(window: &tauri::WebviewWindow) {
     use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW};
     if let Ok(hwnd) = window.hwnd() {
@@ -317,15 +334,19 @@ fn hide_from_alt_tab(window: &tauri::WebviewWindow) {
 
 fn close_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window(LABEL) {
+        #[cfg(target_os = "linux")]
+        offscreen::detach(app);
         let _ = w.destroy();
         st().window_4k = None;
         info!("calendar: drawing window closed");
     }
 }
 
+#[cfg(windows)]
 type Reply = tokio::sync::oneshot::Sender<Result<Vec<u8>, String>>;
 
 /// Save what the webview shows as JPEG or PNG bytes.
+#[cfg(windows)]
 async fn capture(window: &tauri::WebviewWindow, png: bool) -> Result<Vec<u8>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let tx: Arc<Mutex<Option<Reply>>> = Arc::new(Mutex::new(Some(tx)));
@@ -343,6 +364,7 @@ async fn capture(window: &tauri::WebviewWindow, png: bool) -> Result<Vec<u8>, St
     }
 }
 
+#[cfg(windows)]
 unsafe fn start_capture(pw: tauri::webview::PlatformWebview, png: bool, tx: Arc<Mutex<Option<Reply>>>) -> Result<(), String> {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
     let core = pw.controller().CoreWebView2().map_err(|e| e.to_string())?;
@@ -359,6 +381,7 @@ unsafe fn start_capture(pw: tauri::webview::PlatformWebview, png: bool, tx: Arc<
     core.CapturePreview(format, &stream, &handler).map_err(|e| e.to_string())
 }
 
+#[cfg(windows)]
 unsafe fn read_stream(stream: &windows::Win32::System::Com::IStream) -> Result<Vec<u8>, String> {
     use windows::Win32::System::Com::{STATFLAG_NONAME, STATSTG, STREAM_SEEK_SET};
     let mut stat = STATSTG::default();
@@ -369,6 +392,125 @@ unsafe fn read_stream(stream: &windows::Win32::System::Com::IStream) -> Result<V
     stream.Read(buf.as_mut_ptr() as *mut _, buf.len() as u32, Some(&mut read)).ok().map_err(|e| e.to_string())?;
     buf.truncate(read as usize);
     Ok(buf)
+}
+
+/// Linux: WebKitGTK draws the calendar inside a GTK off-screen window, so it keeps laying
+/// out and painting without appearing on any screen (Wayland can't place a window past the
+/// edge of the screen the way Windows can).
+#[cfg(target_os = "linux")]
+mod offscreen {
+    use gtk::prelude::*;
+    use std::cell::RefCell;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+    use webkit2gtk::{SnapshotOptions, SnapshotRegion, WebViewExt};
+
+    thread_local! {
+        // GTK objects live on the main thread only.
+        static HOST: RefCell<Option<gtk::OffscreenWindow>> = const { RefCell::new(None) };
+    }
+
+    /// Move the hidden calendar window's webview into an off-screen window of `w`x`h` pixels.
+    pub async fn attach(window: &tauri::WebviewWindow, w: u32, h: u32, four_k: bool) -> Result<(), String> {
+        let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+        window.with_webview(move |pw| {
+            let view = pw.inner();
+            if let Some(parent) = view.parent().and_then(|p| p.downcast::<gtk::Container>().ok()) {
+                parent.remove(&view);
+            }
+            let host = gtk::OffscreenWindow::new();
+            // One CSS pixel per 1080p pixel, whatever the display scaling: 4K draws the same page at double detail.
+            let scale = host.scale_factor().max(1);
+            let (lw, lh) = (w as i32 / scale, h as i32 / scale);
+            host.set_default_size(lw, lh);
+            view.set_size_request(lw, lh);
+            host.add(&view);
+            host.show_all();
+            view.set_zoom_level((if four_k { 2.0 } else { 1.0 }) / scale as f64);
+            if let Some(old) = HOST.with(|c| c.borrow_mut().replace(host)) {
+                old.close();
+            }
+            let _ = tx.send(Ok(()));
+        }).map_err(|e| e.to_string())?;
+        match tokio::time::timeout(Duration::from_secs(10), rx).await {
+            Ok(Ok(r)) => r,
+            _ => Err("The calendar drawing window didn't start.".into()),
+        }
+    }
+
+    pub fn detach(app: &tauri::AppHandle) {
+        let _ = app.run_on_main_thread(|| {
+            if let Some(host) = HOST.with(|c| c.borrow_mut().take()) {
+                host.close();
+            }
+        });
+    }
+
+    type Reply = tokio::sync::oneshot::Sender<Result<(u32, u32, Vec<u8>), String>>;
+
+    /// What the webview shows, as tightly packed BGRA.
+    pub async fn snapshot(window: &tauri::WebviewWindow) -> Result<(u32, u32, Vec<u8>), String> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let tx: Arc<Mutex<Option<Reply>>> = Arc::new(Mutex::new(Some(tx)));
+        window.with_webview(move |pw| {
+            pw.inner().snapshot(SnapshotRegion::Visible, SnapshotOptions::NONE, None::<&webkit2gtk::gio::Cancellable>, move |r| {
+                let out = r.map_err(|e| e.to_string()).and_then(|s| to_bgra(&s));
+                if let Some(t) = tx.lock().unwrap().take() {
+                    let _ = t.send(out);
+                }
+            });
+        }).map_err(|e| e.to_string())?;
+        match tokio::time::timeout(Duration::from_secs(20), rx).await {
+            Ok(Ok(r)) => r,
+            _ => Err("The calendar picture took too long.".into()),
+        }
+    }
+
+    fn to_bgra(surface: &cairo::Surface) -> Result<(u32, u32, Vec<u8>), String> {
+        let err = |e: cairo::Error| format!("Couldn't read the calendar picture: {e}");
+        let (x0, y0, x1, y1) = cairo::Context::new(surface).and_then(|c| c.clip_extents()).map_err(err)?;
+        let (w, h) = ((x1 - x0).round() as i32, (y1 - y0).round() as i32);
+        if w <= 0 || h <= 0 {
+            return Err("The calendar picture came out empty.".into());
+        }
+        // Copy onto a surface we own, so its pixels can be read.
+        let mut img = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).map_err(err)?;
+        {
+            let cr = cairo::Context::new(&img).map_err(err)?;
+            cr.set_source_surface(surface, -x0, -y0).map_err(err)?;
+            cr.paint().map_err(err)?;
+        }
+        img.flush();
+        let stride = img.stride() as usize;
+        let data = img.data().map_err(|e| format!("Couldn't read the calendar picture: {e}"))?;
+        // Cairo's ARGB32 is B, G, R, A in memory on little-endian machines.
+        let mut out = Vec::with_capacity(w as usize * h as usize * 4);
+        for row in data.chunks(stride).take(h as usize) {
+            for px in row[..w as usize * 4].chunks_exact(4) {
+                out.extend_from_slice(&[px[0], px[1], px[2], 255]);
+            }
+        }
+        Ok((w as u32, h as u32, out))
+    }
+}
+
+/// Save what the webview shows as JPEG or PNG bytes.
+#[cfg(target_os = "linux")]
+async fn capture(window: &tauri::WebviewWindow, png: bool) -> Result<Vec<u8>, String> {
+    let (w, h, bgra) = offscreen::snapshot(window).await?;
+    tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        if png {
+            let rgba: Vec<u8> = bgra.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], p[3]]).collect();
+            let img = image::RgbaImage::from_raw(w, h, rgba).ok_or("Bad calendar picture size.")?;
+            img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+        } else {
+            let rgb: Vec<u8> = bgra.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0]]).collect();
+            let img = image::RgbImage::from_raw(w, h, rgb).ok_or("Bad calendar picture size.")?;
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 92).encode_image(&img).map_err(|e| e.to_string())?;
+        }
+        Ok(out.into_inner())
+    }).await.map_err(|e| e.to_string())?
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
