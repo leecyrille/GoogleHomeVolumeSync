@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Google Home Volume Sync — keep every speaker at the same volume</title>
-  <meta name="description" content="Free, open-source Windows app that keeps Google Home and Nest speaker volumes in sync across your house, puts your family calendar on your TVs, and broadcasts spoken messages. Runs 100% locally, no cloud, no account.">
+  <meta name="description" content="Free, open-source Windows and Linux app that keeps Google Home and Nest speaker volumes in sync across your house, puts your family calendar on your TVs, and broadcasts spoken messages. Runs 100% locally, no cloud, no account.">
   <link rel="icon" href="icon.png" type="image/png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Google Home Volume Sync — every speaker at the same volume">
-  <meta property="og:description" content="Free Windows app that keeps Google Home / Nest speaker volumes matched across your home, shows your calendar on your TVs and broadcasts messages. Local only, open source.">
+  <meta property="og:description" content="Free Windows and Linux app that keeps Google Home / Nest speaker volumes matched across your home, shows your calendar on your TVs and broadcasts messages. Local only, open source.">
   <meta property="og:url" content="https://googlehomevolumesync.com/">
   <meta property="og:image" content="https://googlehomevolumesync.com/screenshots/devices.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -244,13 +244,14 @@
   <main>
     <div class="wrap">
       <section class="hero">
-        <div class="kicker">Free &nbsp;/&nbsp; Windows 10 &amp; 11 &nbsp;/&nbsp; Open source &nbsp;/&nbsp; Not affiliated with Google</div>
+        <div class="kicker">Free &nbsp;/&nbsp; Windows 10 &amp; 11 &nbsp;/&nbsp; Linux &nbsp;/&nbsp; Open source &nbsp;/&nbsp; Not affiliated with Google</div>
         <div class="hero-grid">
           <h1>Every speaker in the house, at the same volume.</h1>
           <div>
-            <p class="lead">Keep Google Home speaker and device volumes in sync with the program running on your Windows computer. It looks for changes in volume in devices, and matches the volume on devices you assign in this program. You can also adjust relative volume gain to balance volumes as desired throughout your home. It also puts your family calendar on your TVs, plays your own videos and music in sync, and broadcasts spoken messages to your speakers.</p>
+            <p class="lead">Keep Google Home speaker and device volumes in sync with the program running on your Windows or Linux computer. It looks for changes in volume in devices, and matches the volume on devices you assign in this program. You can also adjust relative volume gain to balance volumes as desired throughout your home. It also puts your family calendar on your TVs, plays your own videos and music in sync, and broadcasts spoken messages to your speakers.</p>
             <div class="actions">
               <a class="btn btn-ink" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">Download for Windows</a>
+              <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-linux-amd64.deb">Download for Linux</a>
               <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync">View source</a>
             </div>
             <p class="meta">No account, no cloud. Talks to your speakers directly on your network.</p>
@@ -297,7 +298,7 @@
           <div><h2>Three steps, about five minutes.</h2></div>
         </div>
         <div class="steps indent">
-          <div><span class="mono">01</span><h3>Install on a PC that stays on</h3><p>A desktop, a laptop, or a small mini PC in a closet. No admin rights needed, and it starts with Windows by default.</p></div>
+          <div><span class="mono">01</span><h3>Install on a PC that stays on</h3><p>A desktop, a laptop, or a small mini PC in a closet. No admin rights needed on Windows, and it starts when you log in by default. On Linux (Ubuntu and Debian) install the .deb.</p></div>
           <div><span class="mono">02</span><h3>It finds your speakers</h3><p>Every Cast device on the network appears on its own, with its live volume. There is nothing to configure.</p></div>
           <div><span class="mono">03</span><h3>Group them, set the balance</h3><p>Tick the speakers that should move together and nudge each room&rsquo;s Sync Gain until the house sounds even.</p></div>
         </div>
@@ -433,6 +434,7 @@
           <details><summary>Does it fight with the Google Home app?</summary><p>No, it listens to it. Change a volume in the Google Home app, by voice, or on the speaker itself, and the app picks it up and brings the rest of that sync group to match.</p></details>
           <details><summary>What does Sync Gain do?</summary><p>It&rsquo;s a per-device multiplier from 0 to 200%. A speaker at 50% gain sits at half the group&rsquo;s level, and when you change that speaker it reports back at double, so the group stays consistent. Set it once and the whole house moves together at the balance you chose.</p></details>
           <details><summary>Does it run without logging in to Windows?</summary><p>Not yet. It launches when you log in and sits in the tray. On a mini PC that stays logged in, that behaves like an always-on service. A true Windows service is planned.</p></details>
+          <details><summary>Does it run on Linux?</summary><p>Yes. There&rsquo;s a .deb for Ubuntu and Debian, and an AppImage for other distributions on the releases page. Everything works the same, including the calendar on your TVs. Broadcasts use the natural-sounding Piper voices if you add them (see the README), otherwise a more robotic built-in voice.</p></details>
           <details><summary>Does it work with my Google cast groups?</summary><p>Yes, they&rsquo;re discovered and listed separately with their own volume and playback control. They can&rsquo;t be members of a sync group, because a cast group&rsquo;s volume already comes from its speakers and syncing both would apply every change twice.</p></details>
           <details><summary>Does the calendar need my PC to stay on?</summary><p>Yes. The PC redraws the calendar every minute and sends it to your TVs as a picture, so it needs to be on (a small mini PC is ideal). If it goes off, a Roku keeps the last picture and says when it was last updated.</p></details>
           <details><summary>Will a broadcast stop my Spotify?</summary><p>It pauses it. A speaker can only run one casting app, so the message closes Spotify on the speakers it plays on; the app then puts every volume back and tells you where to press play again. Things the app itself was playing carry on by themselves.</p></details>
@@ -456,6 +458,7 @@
         <p>Install it on the PC that never sleeps and your speakers stop arguing with each other.</p>
         <div class="actions">
           <a class="btn btn-ink" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-setup.exe">Download for Windows</a>
+              <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases/latest/download/GoogleHomeVolumeSync-linux-amd64.deb">Download for Linux</a>
           <a class="btn btn-line" href="https://github.com/leecyrille/GoogleHomeVolumeSync/releases">All releases</a>
         </div>
       </section>
